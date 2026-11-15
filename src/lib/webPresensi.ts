@@ -474,8 +474,8 @@ export function parsePerizinan(html: string): BarisIjin[] {
 }
 
 export async function ambilPerizinan({ halaman = 1 }: { halaman?: number } = {}): Promise<HasilPerizinan> {
-  const url = `${PROXY}/p/perizinan${halaman > 1 ? `?page=${halaman}` : ''}`;
-  const res = await req(url);
+  const suffix = halaman > 1 ? `?page=${halaman}` : '';
+  const res = await req(epUrl(`/p/perizinan${suffix}`));
   if (!res.ok) throw new Error(`Gagal memuat perizinan (HTTP ${res.status})`);
   const html = await res.text();
   pastikanBukanLogin(html);
@@ -483,9 +483,8 @@ export async function ambilPerizinan({ halaman = 1 }: { halaman?: number } = {})
 }
 
 export async function ambilIjinPegawai(idPegawai: string, { halaman = 1 }: { halaman?: number } = {}): Promise<HasilPerizinan> {
-  const base = `${PROXY}/p/pegawai/${encodeURIComponent(idPegawai)}/ijins`;
-  const url = `${base}${halaman > 1 ? `?page=${halaman}` : ''}`;
-  const res = await req(url);
+  const suffix = halaman > 1 ? `?page=${halaman}` : '';
+  const res = await req(epUrl(`/p/pegawai/${encodeURIComponent(idPegawai)}/ijins${suffix}`));
   if (!res.ok) throw new Error(`Gagal memuat perizinan pegawai (HTTP ${res.status})`);
   const html = await res.text();
   pastikanBukanLogin(html);
@@ -496,10 +495,19 @@ export function urlBerkas(path: string | null | undefined): string | null {
   if (!path) return null;
   const p = String(path).trim();
   if (!p) return null;
-  if (/^https?:\/\//i.test(p)) return p;
-  if (p.startsWith('/ep/')) return p;
-  if (p.startsWith('/')) return `${PROXY}${p}`;
-  return `${PROXY}/${p.replace(/^\/+/, '')}`;
+  if (/^https?:\/\//i.test(p)) {
+    // Jika URL absolut menunjuk ke host EP internal, rutekan via proxy /ep agar bisa diakses di Tauri
+    // (webview tidak punya cookie/session ke domain asli dan host tertentu bisa diblokir).
+    try {
+      const u = new URL(p);
+      const internal = /(presensi|absen|epresensi)/i.test(u.hostname) || u.pathname.includes('/p/');
+      if (internal) return apiUrl(`${PROXY}${u.pathname}${u.search}`);
+    } catch { /* abaikan */ }
+    return p;
+  }
+  if (p.startsWith('/ep/')) return apiUrl(p);
+  if (p.startsWith('/')) return apiUrl(`${PROXY}${p}`);
+  return apiUrl(`${PROXY}/${p.replace(/^\/+/, '')}`);
 }
 
 export async function ambilBerkas(path: string): Promise<{ blob: Blob; contentType: string }> {

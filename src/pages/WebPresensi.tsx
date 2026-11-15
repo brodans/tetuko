@@ -269,7 +269,8 @@ export default function WebPresensi() {
   const { webPresensiState, setWebPresensiState, serverProfile, pegawai, loginForm } = useAppContext();
   const profileId = serverProfile.id || 'jatim';
   const username = String(pegawai?.nip || loginForm.username || profileId);
-  const isJatimLike = profileId === 'jatim';
+  const isBkdWebProfile = serverProfile.mode === 'bkd-rpc';
+  const tampilDetail = isBkdWebProfile || profileId === 'jatim' || profileId === 'madiun';
 
   // set EP base for proxy routing
   useEffect(() => {
@@ -278,7 +279,7 @@ export default function WebPresensi() {
   }, [serverProfile.epBaseUrl]);
 
   const DAFTAR_TAB = useMemo(() => (
-    isJatimLike
+    tampilDetail
       ? [
           { id: 'imei' as const, label: 'IMEI', icon: Cpu },
           { id: 'detail' as const, label: 'Detail Pegawai', icon: UserSquare2 },
@@ -290,7 +291,7 @@ export default function WebPresensi() {
           { id: 'kehadiran' as const, label: 'Kehadiran', icon: Monitor },
           { id: 'perizinan' as const, label: 'Perizinan', icon: FileText },
         ]
-  ), [isJatimLike]);
+  ), [tampilDetail]);
 
   const sudahLogin = webPresensiState.sudahLogin;
   const hasilImei = webPresensiState.hasilImei as HasilImei | null;
@@ -428,7 +429,7 @@ export default function WebPresensi() {
       if (!hidup) return;
       const hasilTerverifikasi = { ...hasil, profil: hasil.profil ?? tersimpan.hasilImei.profil ?? (tersimpan.nip ? { nama: '', nip: tersimpan.nip } : null) };
       setHasilImei(hasilTerverifikasi as any); setSudahLogin(true); setPemilikSesi(username);
-      const nextTab = (!isJatimLike && tersimpan.tab === 'detail') ? 'imei' : tersimpan.tab;
+      const nextTab = (!tampilDetail && tersimpan.tab === 'detail') ? 'imei' : tersimpan.tab;
       setTab(nextTab);
       dimuatRef.current = { kehadiran: false, detail: false, perizinan: false };
       patch({ dimuat: { kehadiran: false, detail: false, perizinan: false } as any });
@@ -490,9 +491,9 @@ export default function WebPresensi() {
   useEffect(() => {
     if (!sudahLogin) return;
     if (tab === 'kehadiran' && !dimuatRef.current.kehadiran) { dimuatRef.current.kehadiran = true; patch({ dimuat: { ...dimuatRef.current } as any }); void muatKehadiran(1); }
-    if (tab === 'detail' && isJatimLike && !dimuatRef.current.detail) { dimuatRef.current.detail = true; patch({ dimuat: { ...dimuatRef.current } as any }); void muatDetail(); }
+    if (tab === 'detail' && tampilDetail && !dimuatRef.current.detail) { dimuatRef.current.detail = true; patch({ dimuat: { ...dimuatRef.current } as any }); void muatDetail(); }
     if (tab === 'perizinan' && !dimuatRef.current.perizinan) { dimuatRef.current.perizinan = true; patch({ dimuat: { ...dimuatRef.current } as any }); void muatPerizinan(1); }
-  }, [tab, sudahLogin, isJatimLike, muatKehadiran, muatDetail, muatPerizinan, patch]);
+  }, [tab, sudahLogin, tampilDetail, muatKehadiran, muatDetail, muatPerizinan, patch]);
 
   async function proses(e: React.FormEvent) {
     e.preventDefault(); setError(''); setHasilImei(null); setLoadingProses(true);
@@ -561,7 +562,7 @@ export default function WebPresensi() {
       <form onSubmit={proses} className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-sm space-y-4">
         <div className="flex items-center gap-2">
           <Shield className="w-4 h-4 text-indigo-500" />
-          <h2 className="font-semibold text-sm text-slate-800 dark:text-slate-200">Login {isJatimLike ? 'e-Presensi' : 'Web Presensi'}</h2>
+          <h2 className="font-semibold text-sm text-slate-800 dark:text-slate-200">Login {tampilDetail ? 'e-Presensi' : 'Web Presensi'}</h2>
         </div>
 
         {sudahLogin && (
@@ -688,7 +689,7 @@ export default function WebPresensi() {
             </div>
           )}
 
-          {tab === 'detail' && isJatimLike && (
+          {tab === 'detail' && tampilDetail && (
             <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-sm space-y-5">
               <div className="flex items-center justify-between">
                 <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2"><UserSquare2 className="w-5 h-5 text-indigo-500" />Detail Pegawai</h2>
@@ -699,7 +700,7 @@ export default function WebPresensi() {
               {detail && (
                 <>
                   <div className="flex gap-5">
-                    {detail.foto && <img src={detail.foto.startsWith('/ep') ? detail.foto : `/ep${detail.foto}`} alt="Foto pegawai" className="w-24 h-24 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 shrink-0" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />}
+                    {detail.foto && <img src={urlBerkas(detail.foto) || ''} alt="Foto pegawai" className="w-24 h-24 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 shrink-0" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />}
                     <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
                       {Object.entries(detail.profil || {}).map(([k, v]) => <div key={k} className="flex flex-col"><span className="text-[11px] text-slate-400 dark:text-slate-500">{k}</span><span className="text-sm text-slate-700 dark:text-slate-300 font-medium">{v}</span></div>)}
                     </div>
