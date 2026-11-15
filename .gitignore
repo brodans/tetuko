@@ -20,6 +20,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 # Environment (keep examples tracked)
+.env
 .env.local
 .env.*.local
 
