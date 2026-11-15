@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-linux:
@@ -161,11 +161,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: app-v__VERSION__
-          releaseName: "TETUKO v__VERSION__"
-          releaseBody: "Build otomatis GitHub Actions (AppImage, deb, tar.gz). TETUKO - Teknologi Terpadu Komprehensif."
-          releaseDraft: true
-          prerelease: false
           args: --bundles appimage,deb
 
       - name: Package portable tar.gz
