@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use std::{net::SocketAddr, sync::Arc};
 use tauri::Manager;
 mod automation;
-use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
+use tower_http::cors::{AllowHeaders, AllowOrigin, CorsLayer};
 
 const PRESENSI_VERSION: u64 = 89;
 const LOCAL_PORT: u16 = 14200;
@@ -395,7 +395,7 @@ async fn ep_proxy(State(state): State<Arc<AppState>>, req: Request) -> impl Into
     // respons terstruktur agar frontend menampilkan pesan yang jelas alih-alih
     // menganggap halaman challenge sebagai konten /ep/ yang valid.
     let content_type_lc = out_headers
-        .get(header::CONTENT_TYPE)
+        .get(axum::http::header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("")
         .to_ascii_lowercase();
@@ -425,7 +425,7 @@ async fn ep_proxy(State(state): State<Arc<AppState>>, req: Request) -> impl Into
         });
         let body = serde_json::to_vec(&payload).unwrap_or_else(|_| b"{\"error\":\"Cloudflare challenge\"}".to_vec());
         let mut h = HeaderMap::new();
-        h.insert(header::CONTENT_TYPE, HeaderValue::from_static("application/json; charset=utf-8"));
+        h.insert(axum::http::header::CONTENT_TYPE, HeaderValue::from_static("application/json; charset=utf-8"));
         h.insert(HeaderName::from_static("x-tetuko-ep-challenge"), HeaderValue::from_static("1"));
         return (StatusCode::BAD_GATEWAY, h, body).into_response();
     }
