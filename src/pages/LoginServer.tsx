@@ -4,7 +4,7 @@ import {
   ArrowRight, Building2, CalendarClock, CheckCircle2, Fingerprint, MapPin, RefreshCw,
   Sparkles, XCircle, FileCheck, FileText, Activity, Briefcase,
   CreditCard, Clock, UserCheck, ChevronDown, ChevronUp, Copy, Check, Camera, Trash2, X,
-  Smartphone, Send, Lock, Eye, EyeOff, AlertTriangle,
+  Smartphone, Send, AlertTriangle,
 } from 'lucide-react';
 import { usePonorogoAppContext as useAppContext } from '../context/AppContext';
 import { ActionButton, Alert, Badge, Card, CardTitle, PageHeader, StatTile } from '../components/ui/Surface';
@@ -81,14 +81,6 @@ export default function BerandaPonorogo() {
   const [imeiLoading, setImeiLoading] = useState(false);
   const [imeiOutput, setImeiOutput] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const [isUbahPasswordOpen, setIsUbahPasswordOpen] = useState(false);
-  const [pwdNow, setPwdNow] = useState('');
-  const [pwdNew, setPwdNew] = useState('');
-  const [showPwdNow, setShowPwdNow] = useState(false);
-  const [showPwdNew, setShowPwdNew] = useState(false);
-  const [changePwdOutput, setChangePwdOutput] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [pwdLoading, setPwdLoading] = useState(false);
-
   // Photo viewer/crop
   const [modalImg, setModalImg] = useState<{ src: string, title: string } | null>(null);
   const [isProfilePhotoViewerOpen, setIsProfilePhotoViewerOpen] = useState(false);
@@ -108,13 +100,12 @@ export default function BerandaPonorogo() {
   const today = getTodayWIB();
 
   useBackButton(() => {
-    if (isUbahPasswordOpen) { setIsUbahPasswordOpen(false); return true; }
     if (isUpdateImeiOpen) { setIsUpdateImeiOpen(false); return true; }
     if (isCropperOpen) { setIsCropperOpen(false); return true; }
     if (isProfilePhotoViewerOpen) { setIsProfilePhotoViewerOpen(false); return true; }
     setModalImg(null);
     return true;
-  }, !!modalImg || isProfilePhotoViewerOpen || isCropperOpen || isUpdateImeiOpen || isUbahPasswordOpen);
+  }, !!modalImg || isProfilePhotoViewerOpen || isCropperOpen || isUpdateImeiOpen);
 
   const loadDashboard = useCallback(async () => {
     const targetId = getTargetEmployeeId(pegawai, config);
@@ -189,22 +180,6 @@ export default function BerandaPonorogo() {
     } catch (err: any) {
       setImeiOutput({ type: 'error', text: `Network Error: ${err.message}` });
     } finally { setImeiLoading(false); }
-  };
-
-  const doUbahPassword = async () => {
-    if (!pwdNow || !pwdNew) { setChangePwdOutput({ type: 'error', text: 'Password tidak boleh kosong.' }); return; }
-    setPwdLoading(true);
-    try {
-      const data = await sendRequest('/login/Ubah_PasswordMobile', { id_pegawai: config?.idPegawai || pegawai?.id || (pegawai as any)?.id_pegawai, password_sekarang: pwdNow, password_baru: pwdNew });
-      if (data?.success) {
-        setChangePwdOutput({ type: 'success', text: `Password berhasil diubah. ${data.message || ''}`.trim() });
-        setPwdNow(pwdNew); setPwdNew('');
-      } else {
-        setChangePwdOutput({ type: 'error', text: `Gagal mengubah password. ${data?.message || ''}`.trim() });
-      }
-    } catch (err: any) {
-      setChangePwdOutput({ type: 'error', text: `Network Error: ${err.message}` });
-    } finally { setPwdLoading(false); }
   };
 
   // Cropper draw
@@ -416,12 +391,6 @@ export default function BerandaPonorogo() {
                     )}
                   </AnimatePresence>
                 </div>
-
-                <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
-                  <button type="button" onClick={() => { setChangePwdOutput(null); setIsUbahPasswordOpen(true); }} className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold text-sm transition-colors">
-                    <Lock className="w-4 h-4" /> Ubah Password Mobile
-                  </button>
-                </div>
               </div>
             )}
           </Card>
@@ -551,43 +520,6 @@ export default function BerandaPonorogo() {
         )}
       </AnimatePresence>
 
-      {/* Modal Ubah Password */}
-      <AnimatePresence>
-        {isUbahPasswordOpen && (
-          <div className="modal-layer fixed inset-0 z-[200] flex items-center justify-center p-4 overflow-y-auto">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} onClick={() => !pwdLoading && setIsUbahPasswordOpen(false)} className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" />
-            <motion.div initial={{ opacity: 0, scale: 0.97, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97, y: 8 }} transition={{ duration: 0.18, ease: 'easeOut' }} className="relative w-full max-w-md my-auto bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 z-10 flex flex-col overflow-hidden">
-              <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
-                <div className="flex items-center gap-2.5"><div className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0"><Lock className="w-4 h-4 text-blue-600 dark:text-blue-400" /></div><span className="font-bold text-slate-800 dark:text-white text-sm">Ubah Password Mobile</span></div>
-                <button type="button" onClick={() => !pwdLoading && setIsUbahPasswordOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"><X className="w-4 h-4" /></button>
-              </div>
-              <div className="px-5 py-4 space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Password Sekarang</label>
-                  <div className="relative">
-                    <input type={showPwdNow ? 'text' : 'password'} value={pwdNow} onChange={e => setPwdNow(e.target.value)} className="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none pr-10 transition-colors" />
-                    <button type="button" onClick={() => setShowPwdNow(v => !v)} className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">{showPwdNow ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}</button>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Password Baru</label>
-                  <div className="relative">
-                    <input type={showPwdNew ? 'text' : 'password'} value={pwdNew} onChange={e => setPwdNew(e.target.value)} className="w-full px-4 py-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none pr-10 transition-colors" />
-                    <button type="button" onClick={() => setShowPwdNew(v => !v)} className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">{showPwdNew ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}</button>
-                  </div>
-                </div>
-                {changePwdOutput && (
-                  <div className={`p-3.5 rounded-xl text-xs font-semibold border ${changePwdOutput.type === 'success' ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30' : 'bg-red-50 text-red-800 border-red-200 dark:bg-red-950/20 dark:text-red-400 dark:border-red-900/30'}`}>{changePwdOutput.text}</div>
-                )}
-              </div>
-              <div className="px-5 py-4 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-3 shrink-0 bg-slate-50/80 dark:bg-slate-900/80">
-                <button type="button" onClick={() => setIsUbahPasswordOpen(false)} disabled={pwdLoading} className="py-2.5 px-4 border border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold rounded-xl text-sm transition-colors disabled:opacity-50">Batal</button>
-                <button type="button" onClick={() => void doUbahPassword()} disabled={pwdLoading} className="py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-xl text-sm transition-colors">{pwdLoading ? 'Menyimpan...' : 'Simpan'}</button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </>
   );
 }

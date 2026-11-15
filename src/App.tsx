@@ -2,7 +2,7 @@ import React, { Suspense, useMemo, useState, useEffect, useCallback } from 'reac
 import { createPortal } from 'react-dom';
 import {
   Camera, Globe, MapPin, FileCheck, FileText, Home, Zap,
-  Activity, Database as DatabaseIcon, Edit3, BarChart3, Building2, Network, Bot, LogOut, Code2, AlertTriangle, X,
+  Activity, Database as DatabaseIcon, Edit3, BarChart3, Building2, Network, Bot, LogOut, Code2, AlertTriangle, X, KeyRound,
 } from 'lucide-react';
 import { usePresensiServerOnline } from './hooks/usePresensiServerOnline';
 import type { LucideIcon } from 'lucide-react';
@@ -14,6 +14,8 @@ import AppShellLayout from './components/AppShellLayout';
 import ServerHub from './components/ServerHub';
 import DeveloperInspector from './components/DeveloperInspector';
 import AppLoginScreen from './components/AppLoginScreen';
+import ProfilServerAkunModal from './components/ProfilServerAkunModal';
+import PonorogoUbahPasswordModal from './components/PonorogoUbahPasswordModal';
 import { apiUrl } from './lib/apiBase';
 import { AUTOMATION_AVAILABLE } from './lib/deployMode';
 import { navigateTo, pageToPath, pathToRoute, slugToPageId, defaultPageForProfile } from './lib/routes';
@@ -133,6 +135,7 @@ function BkdShell({ isDarkMode, toggleDarkMode, devInspectorOpen, onToggleInspec
   const { pegawai, activePage, setActivePage, logout, serverProfile, loginForm } = useAppContext();
   const serverStatus = usePresensiServerOnline();
   const appSession = loadAppAuthSession();
+  const [profilServerOpen, setProfilServerOpen] = useState(false);
   const allowedBkdPages = useMemo(() => BKD_PAGES.filter(p => isMenuAllowed(appSession?.permissions as any, serverProfile.id, p.id, (appSession?.role as any) || 'user')), [appSession, serverProfile.id]);
 
   if (!pegawai) return null;
@@ -215,6 +218,13 @@ function BkdShell({ isDarkMode, toggleDarkMode, devInspectorOpen, onToggleInspec
           subtitle: nip || serverProfile.nama,
           items: [
             {
+              id: 'profil-server',
+              label: 'Profil Akun Server',
+              hint: 'Ubah profil dan password di server',
+              icon: <KeyRound className="w-4 h-4 text-blue-500" />,
+              onClick: () => setProfilServerOpen(true),
+            },
+            {
               id: 'dev-inspector',
               label: 'Developer Inspector',
               hint: devInspectorOpen ? 'Panel dev aktif (buka/tutup)' : 'Buka panel network/API inspector',
@@ -236,6 +246,7 @@ function BkdShell({ isDarkMode, toggleDarkMode, devInspectorOpen, onToggleInspec
           <Page />
         </Suspense>
       </AppShellLayout>
+      {profilServerOpen && <ProfilServerAkunModal onClose={() => setProfilServerOpen(false)} />}
       <ConfirmLogoutModal open={confirmLogoutOpen} onCancel={() => setConfirmLogoutOpen(false)} onConfirm={doLogout} />
     </>
   );
@@ -316,6 +327,7 @@ function PonorogoShell({ onLogout, isDarkMode, toggleDarkMode, devInspectorOpen,
   const serverStatus = usePresensiServerOnline();
   const lastAppliedRouteSlug = React.useRef<string | null | undefined>(undefined);
   const appSession = loadAppAuthSession();
+  const [ubahPasswordOpen, setUbahPasswordOpen] = useState(false);
   const allowedPonorogoPages = useMemo(() => PONOROGO_PAGES.filter(p => isMenuAllowed(appSession?.permissions as any, 'ponorogo', p.id, (appSession?.role as any) || 'user')), [appSession]);
 
   // Sinkronkan hanya saat slug URL berubah dari luar (refresh/deep-link/popstate), bukan saat klik menu internal.
@@ -395,6 +407,13 @@ function PonorogoShell({ onLogout, isDarkMode, toggleDarkMode, devInspectorOpen,
           subtitle: nip || 'Pegawai',
           items: [
             {
+              id: 'ubah-password-mobile',
+              label: 'Ubah Password Mobile',
+              hint: 'Ubah password akun presensi mobile',
+              icon: <KeyRound className="w-4 h-4 text-blue-500" />,
+              onClick: () => setUbahPasswordOpen(true),
+            },
+            {
               id: 'dev-inspector',
               label: 'Developer Inspector',
               hint: devInspectorOpen ? 'Panel dev aktif (buka/tutup)' : 'Buka panel network/API inspector',
@@ -416,6 +435,7 @@ function PonorogoShell({ onLogout, isDarkMode, toggleDarkMode, devInspectorOpen,
           <Page />
         </Suspense>
       </AppShellLayout>
+      <PonorogoUbahPasswordModal open={ubahPasswordOpen} onClose={() => setUbahPasswordOpen(false)} />
       <ConfirmLogoutModal open={confirmLogoutOpen} onCancel={() => setConfirmLogoutOpen(false)} onConfirm={doLogout} />
     </>
   );
