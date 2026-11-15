@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use std::{net::SocketAddr, sync::Arc};
 use tauri::Manager;
 mod automation;
-use tower_http::cors::{AllowHeaders, AllowOrigin, Any, CorsLayer};
+use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
 
 const PRESENSI_VERSION: u64 = 89;
 const LOCAL_PORT: u16 = 14200;
@@ -817,7 +817,7 @@ async fn start_local_server() {
     // Jangan gunakan wildcard origin/headers bersamaan dengan credentials (panic di tower-http 0.6.x).
     let cors = CorsLayer::new()
         .allow_origin(AllowOrigin::mirror_request())
-        .allow_methods(Any)
+        .allow_methods(tower_http::cors::AllowMethods::mirror_request())
         .allow_headers(AllowHeaders::mirror_request())
         .allow_credentials(true);
 
