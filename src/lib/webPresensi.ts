@@ -36,18 +36,21 @@ async function req(url: string, opts: RequestInit = {}): Promise<Response> {
     return await fetch(targetUrl, { credentials: 'include', ...opts, headers });
   };
 
+  let targetUrl = url;
+  if (isTauriRuntime()) {
+    await ensureTauriApiBase();
+    targetUrl = rebaseTauriApiUrlToCurrent(url);
+  }
+
   try {
-    return await doFetch(url);
+    return await doFetch(targetUrl);
   } catch (e) {
     // Tauri: probe ulang port proxy lokal lalu retry sekali jika target masih lokal (127.0.0.1:14200-14205)
     if (isTauriRuntime()) {
       try {
-        const prevBase = getTauriApiBase();
         await ensureTauriApiBase(true);
         const rebased = rebaseTauriApiUrlToCurrent(url);
-        if (rebased !== url || getTauriApiBase() !== prevBase) {
-          return await doFetch(rebased);
-        }
+        return await doFetch(rebased);
       } catch {
         // abaikan, lanjut lempar error asli
       }
