@@ -3,7 +3,7 @@
  * Adapted for unified app (profile-aware EP base via header/cookie handled by proxy).
  */
 
-import { apiUrl } from './apiBase';
+import { apiUrl, ensureTauriApiBase, getTauriApiBase, rebaseTauriApiUrlToCurrent } from './apiBase';
 
 const PROXY = '/ep';
 function epUrl(pathAfterEp: string) {
@@ -28,16 +28,34 @@ const PESAN_JARINGAN = isTauriRuntime()
 
 /** fetch dengan credentials include dan pesan error yang jelas. */
 async function req(url: string, opts: RequestInit = {}): Promise<Response> {
-  try {
+  const doFetch = async (targetUrl: string) => {
     const headers = new Headers(opts.headers || {});
     if (_epBaseOverride && !_epBaseOverride.includes('undefined')) {
       headers.set('x-presensi-ep-base', _epBaseOverride);
     }
-    return await fetch(url, { credentials: 'include', ...opts, headers });
+    return await fetch(targetUrl, { credentials: 'include', ...opts, headers });
+  };
+
+  try {
+    return await doFetch(url);
   } catch (e) {
+    // Tauri: probe ulang port proxy lokal lalu retry sekali jika target masih lokal (127.0.0.1:14200-14205)
+    if (isTauriRuntime()) {
+      try {
+        const prevBase = getTauriApiBase();
+        await ensureTauriApiBase(true);
+        const rebased = rebaseTauriApiUrlToCurrent(url);
+        if (rebased !== url || getTauriApiBase() !== prevBase) {
+          return await doFetch(rebased);
+        }
+      } catch {
+        // abaikan, lanjut lempar error asli
+      }
+    }
+
     const detail = e instanceof Error ? e.message : String(e || 'unknown');
     const hint = isTauriRuntime()
-      ? ' (proxy lokal 127.0.0.1:14200 tidak merespons — pastikan build TETUKO terbaru terinstal dan aplikasi berjalan normal)'
+      ? ` (proxy lokal ${getTauriApiBase()} tidak merespons — pastikan build TETUKO terbaru terinstal dan aplikasi berjalan normal)`
       : ' (pastikan server dev/proxy aktif)';
     const err = new Error(`${PESAN_JARINGAN}${hint} [${detail}]`);
     (err as Error & { sebab: unknown }).sebab = e;

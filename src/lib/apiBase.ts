@@ -11,7 +11,8 @@ let tauriApiBase = `http://127.0.0.1:${LOCAL_PORT_START}`;
 let tauriBaseResolved = false;
 let tauriBaseResolvePromise: Promise<string> | null = null;
 
-async function probeTauriLocalBase(): Promise<string> {
+async function probeTauriLocalBase(force = false): Promise<string> {
+  if (!force && tauriBaseResolved) return tauriApiBase;
   const ports: number[] = [];
   for (let p = LOCAL_PORT_START; p <= LOCAL_PORT_END; p++) ports.push(p);
 
@@ -34,15 +35,34 @@ async function probeTauriLocalBase(): Promise<string> {
     }
   }
 
-  tauriBaseResolved = true; // stop re-probing loops; keep default
+  tauriBaseResolved = true; // prevent tight loops; callers can force re-probe on failure
   return tauriApiBase;
 }
 
-export async function ensureTauriApiBase(): Promise<string> {
+export async function ensureTauriApiBase(force = false): Promise<string> {
   if (!isTauriRuntime()) return '';
-  if (tauriBaseResolved) return tauriApiBase;
-  if (!tauriBaseResolvePromise) tauriBaseResolvePromise = probeTauriLocalBase().finally(() => { tauriBaseResolvePromise = null; });
+  if (!force && tauriBaseResolved) return tauriApiBase;
+  if (!tauriBaseResolvePromise) tauriBaseResolvePromise = probeTauriLocalBase(force).finally(() => { tauriBaseResolvePromise = null; });
   return tauriBaseResolvePromise;
+}
+
+export function getTauriApiBase(): string {
+  return tauriApiBase;
+}
+
+export function rebaseTauriApiUrlToCurrent(url: string): string {
+  if (!isTauriRuntime()) return url;
+  try {
+    const u = new URL(url);
+    const isLocal = (u.hostname === '127.0.0.1' || u.hostname === 'localhost');
+    const port = Number(u.port || (u.protocol === 'https:' ? 443 : 80));
+    if (isLocal && port >= LOCAL_PORT_START && port <= LOCAL_PORT_END) {
+      return `${tauriApiBase}${u.pathname}${u.search}${u.hash}`;
+    }
+  } catch {
+    // ignore
+  }
+  return url;
 }
 
 if (isTauriRuntime()) {
