@@ -1,0 +1,16 @@
+# Vercel deploy (web) - exclude desktop/native and local artifacts
+src-tauri/
+target/
+*.AppImage
+*.deb
+*.tar.gz
+*.log
+node_modules/.cache/
+.devtools/
+tmp/
+.env.local
+.env.*.local
+ocr_service.py
+README.md
+data/*.json
+# keep source and public assets needed for web build

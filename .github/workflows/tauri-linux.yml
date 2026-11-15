@@ -1,0 +1,215 @@
+name: Tauri Linux (AppImage & tar.gz)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-24.04
+    env:
+      # Firebase / Firestore (wajib untuk login & penyimpanan)
+      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY || vars.VITE_FIREBASE_API_KEY || '' }}
+      VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN || vars.VITE_FIREBASE_AUTH_DOMAIN || '' }}
+      VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID || vars.VITE_FIREBASE_PROJECT_ID || '' }}
+      VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET || vars.VITE_FIREBASE_STORAGE_BUCKET || '' }}
+      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID || vars.VITE_FIREBASE_MESSAGING_SENDER_ID || '' }}
+      VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID || vars.VITE_FIREBASE_APP_ID || '' }}
+      VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID || vars.VITE_FIREBASE_MEASUREMENT_ID || '' }}
+      VITE_APP_SECRET: ${{ secrets.VITE_APP_SECRET || vars.VITE_APP_SECRET || '' }}
+      VITE_PAYLOAD_KEY: ${{ secrets.VITE_PAYLOAD_KEY || vars.VITE_PAYLOAD_KEY || '' }}
+
+      # Profil Jatim
+      VITE_JATIM_ID: ${{ secrets.VITE_JATIM_ID || vars.VITE_JATIM_ID || 'jatim' }}
+      VITE_JATIM_NAME: ${{ secrets.VITE_JATIM_NAME || vars.VITE_JATIM_NAME || 'Provinsi Jawa Timur' }}
+      VITE_JATIM_LABEL: ${{ secrets.VITE_JATIM_LABEL || vars.VITE_JATIM_LABEL || 'Presensi Jatimprov' }}
+      VITE_JATIM_GATEWAY_URL: ${{ secrets.VITE_JATIM_GATEWAY_URL || vars.VITE_JATIM_GATEWAY_URL || '' }}
+      VITE_JATIM_EP_BASE_URL: ${{ secrets.VITE_JATIM_EP_BASE_URL || vars.VITE_JATIM_EP_BASE_URL || '' }}
+      VITE_JATIM_MODE: ${{ secrets.VITE_JATIM_MODE || vars.VITE_JATIM_MODE || 'bkd-rpc' }}
+      VITE_JATIM_REQUIRES_PHOTO: ${{ secrets.VITE_JATIM_REQUIRES_PHOTO || vars.VITE_JATIM_REQUIRES_PHOTO || 'false' }}
+      VITE_JATIM_REQUIRES_WORKCODE: ${{ secrets.VITE_JATIM_REQUIRES_WORKCODE || vars.VITE_JATIM_REQUIRES_WORKCODE || 'true' }}
+
+      # Profil Madiun
+      VITE_MADIUN_ID: ${{ secrets.VITE_MADIUN_ID || vars.VITE_MADIUN_ID || 'madiun' }}
+      VITE_MADIUN_NAME: ${{ secrets.VITE_MADIUN_NAME || vars.VITE_MADIUN_NAME || 'Kabupaten Madiun' }}
+      VITE_MADIUN_LABEL: ${{ secrets.VITE_MADIUN_LABEL || vars.VITE_MADIUN_LABEL || 'Presensi Madiunkab' }}
+      VITE_MADIUN_GATEWAY_URL: ${{ secrets.VITE_MADIUN_GATEWAY_URL || vars.VITE_MADIUN_GATEWAY_URL || '' }}
+      VITE_MADIUN_EP_BASE_URL: ${{ secrets.VITE_MADIUN_EP_BASE_URL || vars.VITE_MADIUN_EP_BASE_URL || '' }}
+      VITE_MADIUN_MODE: ${{ secrets.VITE_MADIUN_MODE || vars.VITE_MADIUN_MODE || 'bkd-rpc' }}
+      VITE_MADIUN_REQUIRES_PHOTO: ${{ secrets.VITE_MADIUN_REQUIRES_PHOTO || vars.VITE_MADIUN_REQUIRES_PHOTO || 'false' }}
+      VITE_MADIUN_REQUIRES_WORKCODE: ${{ secrets.VITE_MADIUN_REQUIRES_WORKCODE || vars.VITE_MADIUN_REQUIRES_WORKCODE || 'true' }}
+
+      # Profil Ponorogo
+      VITE_PONOROGO_ID: ${{ secrets.VITE_PONOROGO_ID || vars.VITE_PONOROGO_ID || 'ponorogo' }}
+      VITE_PONOROGO_NAME: ${{ secrets.VITE_PONOROGO_NAME || vars.VITE_PONOROGO_NAME || 'Kabupaten Ponorogo' }}
+      VITE_PONOROGO_LABEL: ${{ secrets.VITE_PONOROGO_LABEL || vars.VITE_PONOROGO_LABEL || 'Presensi Ponorogo' }}
+      VITE_PONOROGO_GATEWAY_URL: ${{ secrets.VITE_PONOROGO_GATEWAY_URL || vars.VITE_PONOROGO_GATEWAY_URL || '' }}
+      VITE_PONOROGO_EP_BASE_URL: ${{ secrets.VITE_PONOROGO_EP_BASE_URL || vars.VITE_PONOROGO_EP_BASE_URL || '' }}
+      VITE_PONOROGO_MODE: ${{ secrets.VITE_PONOROGO_MODE || vars.VITE_PONOROGO_MODE || 'ponorogo-absensi' }}
+      VITE_PONOROGO_REQUIRES_PHOTO: ${{ secrets.VITE_PONOROGO_REQUIRES_PHOTO || vars.VITE_PONOROGO_REQUIRES_PHOTO || 'true' }}
+      VITE_PONOROGO_REQUIRES_WORKCODE: ${{ secrets.VITE_PONOROGO_REQUIRES_WORKCODE || vars.VITE_PONOROGO_REQUIRES_WORKCODE || 'false' }}
+      VITE_PONOROGO_API_BASE: ${{ secrets.VITE_PONOROGO_API_BASE || vars.VITE_PONOROGO_API_BASE || '' }}
+      VITE_PONOROGO_IMAGE_BASE: ${{ secrets.VITE_PONOROGO_IMAGE_BASE || vars.VITE_PONOROGO_IMAGE_BASE || '' }}
+
+      # Lainnya
+      VITE_LOCAL_API_PORT: ${{ secrets.VITE_LOCAL_API_PORT || vars.VITE_LOCAL_API_PORT || '14200' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            xdg-utils
+
+      - name: Configure AppImage bundler
+        run: echo 'APPIMAGE_EXTRACT_AND_RUN=1' >> "$GITHUB_ENV"
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Generate .env for build
+        shell: bash
+        run: |
+          cat > .env <<EOF
+          VITE_FIREBASE_API_KEY=${VITE_FIREBASE_API_KEY}
+          VITE_FIREBASE_AUTH_DOMAIN=${VITE_FIREBASE_AUTH_DOMAIN}
+          VITE_FIREBASE_PROJECT_ID=${VITE_FIREBASE_PROJECT_ID}
+          VITE_FIREBASE_STORAGE_BUCKET=${VITE_FIREBASE_STORAGE_BUCKET}
+          VITE_FIREBASE_MESSAGING_SENDER_ID=${VITE_FIREBASE_MESSAGING_SENDER_ID}
+          VITE_FIREBASE_APP_ID=${VITE_FIREBASE_APP_ID}
+          VITE_FIREBASE_MEASUREMENT_ID=${VITE_FIREBASE_MEASUREMENT_ID}
+          VITE_APP_SECRET=${VITE_APP_SECRET}
+          VITE_PAYLOAD_KEY=${VITE_PAYLOAD_KEY}
+
+          VITE_JATIM_ID=${VITE_JATIM_ID}
+          VITE_JATIM_NAME=${VITE_JATIM_NAME}
+          VITE_JATIM_LABEL=${VITE_JATIM_LABEL}
+          VITE_JATIM_GATEWAY_URL=${VITE_JATIM_GATEWAY_URL}
+          VITE_JATIM_EP_BASE_URL=${VITE_JATIM_EP_BASE_URL}
+          VITE_JATIM_MODE=${VITE_JATIM_MODE}
+          VITE_JATIM_REQUIRES_PHOTO=${VITE_JATIM_REQUIRES_PHOTO}
+          VITE_JATIM_REQUIRES_WORKCODE=${VITE_JATIM_REQUIRES_WORKCODE}
+
+          VITE_MADIUN_ID=${VITE_MADIUN_ID}
+          VITE_MADIUN_NAME=${VITE_MADIUN_NAME}
+          VITE_MADIUN_LABEL=${VITE_MADIUN_LABEL}
+          VITE_MADIUN_GATEWAY_URL=${VITE_MADIUN_GATEWAY_URL}
+          VITE_MADIUN_EP_BASE_URL=${VITE_MADIUN_EP_BASE_URL}
+          VITE_MADIUN_MODE=${VITE_MADIUN_MODE}
+          VITE_MADIUN_REQUIRES_PHOTO=${VITE_MADIUN_REQUIRES_PHOTO}
+          VITE_MADIUN_REQUIRES_WORKCODE=${VITE_MADIUN_REQUIRES_WORKCODE}
+
+          VITE_PONOROGO_ID=${VITE_PONOROGO_ID}
+          VITE_PONOROGO_NAME=${VITE_PONOROGO_NAME}
+          VITE_PONOROGO_LABEL=${VITE_PONOROGO_LABEL}
+          VITE_PONOROGO_GATEWAY_URL=${VITE_PONOROGO_GATEWAY_URL}
+          VITE_PONOROGO_EP_BASE_URL=${VITE_PONOROGO_EP_BASE_URL}
+          VITE_PONOROGO_MODE=${VITE_PONOROGO_MODE}
+          VITE_PONOROGO_REQUIRES_PHOTO=${VITE_PONOROGO_REQUIRES_PHOTO}
+          VITE_PONOROGO_REQUIRES_WORKCODE=${VITE_PONOROGO_REQUIRES_WORKCODE}
+          VITE_PONOROGO_API_BASE=${VITE_PONOROGO_API_BASE}
+          VITE_PONOROGO_IMAGE_BASE=${VITE_PONOROGO_IMAGE_BASE}
+
+          VITE_LOCAL_API_PORT=${VITE_LOCAL_API_PORT}
+          EOF
+          echo "Generated .env:"
+          cat .env
+
+      - name: Read app version
+        id: app
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          NAME=$(node -p "require('./src-tauri/tauri.conf.json').productName")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Build Linux bundles (AppImage + deb)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: app-v__VERSION__
+          releaseName: "TETUKO v__VERSION__"
+          releaseBody: "Build otomatis GitHub Actions (AppImage, deb, tar.gz). TETUKO - Teknologi Terpadu Komprehensif."
+          releaseDraft: true
+          prerelease: false
+          args: --bundles appimage,deb
+
+      - name: Package portable tar.gz
+        shell: bash
+        env:
+          APP_VERSION: ${{ steps.app.outputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BIN="src-tauri/target/release/tetuko"
+          if [ ! -f "$BIN" ]; then
+            echo "Binary tidak ditemukan: $BIN"
+            echo "Isi target/release:"; ls -la src-tauri/target/release || true
+            exit 1
+          fi
+          OUTDIR="${RUNNER_TEMP}/pkg"
+          mkdir -p "$OUTDIR/tetuko"
+          cp "$BIN" "$OUTDIR/tetuko/"
+          chmod +x "$OUTDIR/tetuko/tetuko"
+          # sertakan README/.env.example jika ada (opsional)
+          [ -f README.md ] && cp README.md "$OUTDIR/tetuko/" || true
+          [ -f .env.example ] && cp .env.example "$OUTDIR/tetuko/" || true
+          TAR_NAME="TETUKO-${APP_VERSION}-linux-x64.tar.gz"
+          tar -C "$OUTDIR" -czf "${RUNNER_TEMP}/${TAR_NAME}" tetuko
+          echo "TAR_PATH=${RUNNER_TEMP}/${TAR_NAME}" >> "$GITHUB_ENV"
+          echo "TAR_NAME=${TAR_NAME}" >> "$GITHUB_ENV"
+          ls -lh "${RUNNER_TEMP}/${TAR_NAME}"
+
+      - name: Upload tar.gz to draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APP_VERSION: ${{ steps.app.outputs.version }}
+        run: |
+          set -euo pipefail
+          TAG="app-v${APP_VERSION}"
+          gh release upload "$TAG" "$TAR_PATH" --clobber
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tetuko-linux-${{ steps.app.outputs.version }}
+          if-no-files-found: warn
+          path: |
+            src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/deb/*.deb
+            ${{ env.TAR_PATH }}

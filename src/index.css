@@ -1,0 +1,355 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-slate-850: #162032;
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+@layer base {
+  /* ─── Responsive Viewport ───────────────────────────────────────── */
+  html {
+    -webkit-text-size-adjust: 100%;
+    -moz-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    background: #ffffff;
+    color: #0f172a;
+    font-family: var(--font-sans);
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+    -webkit-tap-highlight-color: transparent;
+    overflow-x: hidden;
+  }
+
+  html.dark body {
+    background: #0f172a;
+    color: #e2e8f0;
+  }
+
+  @media (pointer: coarse) {
+    body {
+      touch-action: pan-x pan-y;
+    }
+  }
+
+  /* Box-sizing global */
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  /* Ring Aksesibilitas Terpusat */
+  :focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+  }
+
+  /* Hilangkan outline fokus bawaan pada field teks agar tampilan tetap rapi,
+     sambil mempertahankan gaya fokus aksesibel melalui :focus-visible. */
+  input:focus, textarea:focus, select:focus {
+    outline: none;
+  }
+  input:focus-visible, textarea:focus-visible, select:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 0;
+  }
+
+  /* Blue selection highlight.
+   *
+   * Warna seleksi teks yang konsisten
+   * (hitam pekat) yang tidak terlihat di atas background gelap. Aturan ini
+   * memaksa highlight biru transparan yang jelas di light maupun dark mode.
+   */
+  ::selection {
+    background: rgb(37 99 235 / 45%);
+  }
+  ::-moz-selection {
+    background: rgb(37 99 235 / 45%);
+  }
+
+  html.dark ::selection,
+  html.dark ::-moz-selection {
+    background: rgb(59 130 246 / 55%);
+  }
+
+  /* Root container full viewport */
+  #root {
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  html.app-shell-active,
+  html.app-shell-active body,
+  html.app-shell-active #root {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  @supports (min-height: 100svh) {
+    body,
+    #root {
+      min-height: 100svh;
+    }
+  }
+
+  :root {
+    --poni-kiri: 0px;
+    --poni-kanan: 0px;
+    --poni-atas: 0px;
+    --poni-bawah: 0px;
+  }
+}
+
+/* Gutter untuk isi halaman */
+@layer components {
+  .poni-konten {
+    padding: 1.25rem 1rem;
+  }
+  @media (min-width: 640px) {
+    .poni-konten {
+      padding: 1.5rem;
+    }
+  }
+  @media (min-width: 1024px) {
+    .poni-konten {
+      padding: 1.75rem 2rem;
+    }
+  }
+  .konten-gulir {
+    min-height: 0;
+    overscroll-behavior-y: auto;
+  }
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.login-grid-mask {
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 20%, transparent 100%);
+  mask-image: radial-gradient(ellipse at center, #000 20%, transparent 100%);
+}
+
+.custom-scrollbar {
+  scroll-behavior: smooth;
+}
+
+/* Kolom konten adalah satu-satunya area gulir utama, tanpa gutter permanen. */
+.konten-gulir {
+  min-height: 0;
+}
+
+/* Satu aturan global agar area scroll utama dan panel samping tampak konsisten. */
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(203 213 225) transparent;
+  }
+  .dark * {
+    scrollbar-color: rgb(71 85 105) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: rgb(203 213 225);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  .dark *::-webkit-scrollbar-thumb {
+    background: rgb(71 85 105);
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgb(148 163 184);
+    background-clip: content-box;
+  }
+  .dark *::-webkit-scrollbar-thumb:hover {
+    background: rgb(100 116 139);
+  }
+
+  /* Sidebar selalu gelap: scrollbar tetap gelap walau mode terang */
+  .poni-sidebar,
+  .poni-sidebar * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(71 85 105) transparent;
+  }
+  .poni-sidebar::-webkit-scrollbar-thumb,
+  .poni-sidebar *::-webkit-scrollbar-thumb {
+    background: rgb(71 85 105);
+  }
+  .poni-sidebar::-webkit-scrollbar-thumb:hover,
+  .poni-sidebar *::-webkit-scrollbar-thumb:hover {
+    background: rgb(100 116 139);
+    background-clip: content-box;
+  }
+}
+
+/* ─── Animations & Keyframes ──────────────────────────────────────── */
+/*
+ * ⚠️ `@keyframes spin` sengaja tidak ditulis di sini.
+ *
+ * Semula ada, hanya untuk `.animate-spin-slow` — kelas yang tidak pernah
+ * dipakai. Yang tidak terlihat dari diff: utility `animate-spin` milik
+ * Tailwind juga memakai keyframes bernama `spin`, dan utility itu dipakai
+ * di `src/pages/WebPresensi.tsx` untuk spinner saat memuat.
+ *
+ * Karena itu baris `@keyframes spin` tidak boleh ikut dihapus asal-asalan.
+ * Sudah diverifikasi terpisah dengan `@tailwindcss/cli`: utility `animate-spin`
+ * memunculkan keyframes-nya sendiri, jadi tidak bergantung pada berkas ini.
+ */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes popIn {
+  0% { opacity: 0; transform: scale(0.92); }
+  50% { opacity: 1; transform: scale(1.02); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes captchaShimmer {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(120%); }
+}
+.captcha-shimmer {
+  background: linear-gradient(100deg, transparent 15%, rgb(99 102 241 / 18%) 50%, transparent 85%);
+  animation: captchaShimmer 1.25s ease-in-out infinite;
+}
+.dark .captcha-shimmer {
+  background: linear-gradient(100deg, transparent 15%, rgb(129 140 248 / 24%) 50%, transparent 85%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .captcha-shimmer { animation-duration: 2.5s; }
+}
+.animate-fade-in {
+  animation: fadeIn 0.25s ease-out forwards;
+}
+.animate-pop-in {
+  animation: popIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ─── Modal: animasi ringan, tanpa blur & tanpa layout shift ────────
+ *
+ * Modal adalah tempat yang paling sering dibuka-tutup, jadi animasinya
+ * harus murah. Tiga hal yang membuat modal terasa berat, dan ketiganya
+ * sudah dihilangkan di sini:
+ *
+ * 1. **`backdrop-filter: blur()`** pada overlay. Ini penyebab utama
+ *    "lemot": browser harus mengambil ulang seluruh isi layar di belakang
+ *    setiap kali frame digambar ulang, lalu mengaburinya — di ponsel dan
+ *    tablet itu bisa ratusan milidetik per frame. Diganti warna pekat
+ *    saja; panel modalnya sendiri tetap berbayang.
+ * 2. **`scale` pada panel.** `transform: scale()` memaksa browser
+ *    menghitung ulang seluruh isi panel tiap frame (bukan cuma
+ *    memindahkan bitmap seperti `translate`). Diganti `translateY` saja,
+ *    yang murni operasi compositor.
+ * 3. **Perubahan `overflow` pada `<body>`.** Shell aplikasi mengunci gulir
+ *    dokumen dan memakai kolom konten sebagai satu-satunya area scroll,
+ *    jadi modal tidak menambah atau menghilangkan scrollbar halaman kedua.
+ *
+ * Semua animasi ini hanya menyentuh `opacity` dan `transform`, jadi
+ * berjalan di thread compositor tanpa memicu layout maupun paint isi.
+ */
+.modal-layer {
+  right: var(--dev-panel-right-offset, 0px) !important;
+}
+
+.modal-layer.fixed.inset-0 {
+  --modal-safe-inset-top: 1rem;
+  --modal-safe-inset-right: 1rem;
+  --modal-safe-inset-bottom: 1rem;
+  --modal-safe-inset-left: 1rem;
+  padding: var(--modal-safe-inset-top) var(--modal-safe-inset-right)
+    var(--modal-safe-inset-bottom) var(--modal-safe-inset-left);
+}
+
+.modal-layer.fixed.inset-0 > .modal-panel-enter {
+  max-height: calc(100dvh - var(--modal-safe-inset-top) - var(--modal-safe-inset-bottom));
+}
+
+@keyframes modal-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes modal-panel-in {
+  from { opacity: 0; transform: translate3d(0, 10px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+.modal-overlay-enter {
+  animation: modal-overlay-in 0.14s ease-out both;
+}
+.modal-panel-enter {
+  animation: modal-panel-in 0.16s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+/* Saat menutup, `open` langsung false sehingga elemen dilepas seketika.
+ * Without exit animation, tidak ada jeda "menunggu animasi" yang terasa
+ * saat modal hilang. */
+@media (prefers-reduced-motion: reduce) {
+  .modal-overlay-enter,
+  .modal-panel-enter {
+    animation-duration: 0.01ms;
+  }
+}
+
+/* ─── Popup kalender (DatePicker) ───────────────────────────────────
+ *
+ * Panel ini dirender lewat `createPortal` ke `document.body` dengan
+ * `position: fixed`, jadi animasi masuknya harus `transform`-only supaya
+ * tidak memicu layout. Dipisah dua keyframe karena arah masuk mengikuti
+ * sisi panel: dari atas saat terbuka ke bawah, dari bawah saat terbuka
+ * ke atas. Satu keyframe untuk keduanya akan terlihat melompat.
+ */
+@keyframes popInBelow {
+  from { opacity: 0; transform: translate3d(0, -6px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes popInAbove {
+  from { opacity: 0; transform: translate3d(0, 6px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+.animate-pop-in-below {
+  animation: popInBelow 0.13s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.animate-pop-in-above {
+  animation: popInAbove 0.13s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pop-in-below,
+  .animate-pop-in-above {
+    animation-duration: 0.01ms;
+  }
+}
+
+.developer-inspector-layer {
+  isolation: isolate;
+}
+
+/*
+ * ⚠️ Dua blok terakhir di berkas ini sudah dihapus karena tidak dirujuk satu
+ * pun kelas di `src/**`: `.grid-pattern` (dekorasi grid halaman login) dan
+ * `.custom-grid` (grid proyeksi titik absen di `LokasiAbsen.tsx`). Kalau
+ * ternyata masih dipakai, bentuknya bukan gagal diam-diam — gridnya hilang.
+ */
