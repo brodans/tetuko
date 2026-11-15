@@ -1459,17 +1459,19 @@ function PonorogoLaporanPage() {
                   <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase">
                     Status Filter Rekap
                   </label>
-                  <select
+                  <Dropdown
                     value={statusFilter}
-                    onChange={(e) => {
-                      setStatusFilter(e.target.value);
+                    onChange={(v) => {
+                      setStatusFilter(v);
                       clearReport();
                     }}
-                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-blue-500"
-                  >
-                    <option value="pns">Pegawai Negeri Sipil (PNS)</option>
-                    <option value="non_pns">Non-PNS (PTT / Kontrak / Lainnya)</option>
-                  </select>
+                    opsi={[
+                      { value: 'pns', label: 'Pegawai Negeri Sipil (PNS)' },
+                      { value: 'non_pns', label: 'Non-PNS (PTT / Kontrak / Lainnya)' },
+                    ]}
+                    placeholder="Pilih status pegawai"
+                    aria-label="Status Filter Rekap"
+                  />
                 </div>
               </div>
             )}

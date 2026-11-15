@@ -396,6 +396,7 @@ function PonorogoShell({ onLogout, isDarkMode, toggleDarkMode, devInspectorOpen,
         headerTitle={page.label}
         headerSubtitle={`${displayName}${nip ? ` · ${nip}` : ''}`}
         collapsible
+        footer={AUTOMATION_AVAILABLE ? <GlobalPresetScheduler /> : undefined}
         statusLabel={serverStatus === 'online' ? 'Online' : 'Offline'}
         statusTone={serverStatus === 'online' ? 'emerald' : 'amber'}
         showSidebarAccount={false}

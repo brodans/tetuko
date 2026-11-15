@@ -27,6 +27,7 @@ import {
 } from '../components/GlobalAutomasiScheduler';
 import PresetAutomasiFormModal from '../components/PresetAutomasiFormModal';
 import StockFotoManager from '../components/ui/StockFotoManager';
+import TimePicker from '../components/ui/TimePicker';
 
 // ─── Toggle switch ─────────────────────────────────────────────────────────────
 function Toggle({ value, onChange, color = 'blue' }: {
@@ -281,10 +282,11 @@ export default function Automasi() {
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                   <label className="text-xs font-bold text-slate-600 dark:text-slate-300 shrink-0">Ingatkan mulai jam:</label>
-                  <input type="time" value={jamBatas} onChange={e => handleJamBatasChange(e.target.value)}
-                    className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-800 dark:text-slate-100 font-mono" />
+                  <div className="w-40 min-w-[10rem]">
+                    <TimePicker value={jamBatas} onChange={handleJamBatasChange} className="w-full" />
+                  </div>
                   <span className="text-xs text-slate-400">WIB</span>
                 </div>
                 <div className="flex items-start gap-3">

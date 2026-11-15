@@ -390,6 +390,46 @@ async fn ep_proxy(State(state): State<Arc<AppState>>, req: Request) -> impl Into
         Err(e) => return (StatusCode::BAD_GATEWAY, format!("Proxy read error: {}", e)).into_response(),
     };
 
+    // Deteksi Cloudflare challenge / WAF interstitial dari upstream presensi.
+    // Proxy lokal (reqwest) tidak bisa mengeksekusi JS challenge, jadi kirimkan
+    // respons terstruktur agar frontend menampilkan pesan yang jelas alih-alih
+    // menganggap halaman challenge sebagai konten /ep/ yang valid.
+    let content_type_lc = out_headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let cf_mitigated = out_headers
+        .get("cf-mitigated")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let body_prefix = String::from_utf8_lossy(&bytes[..bytes.len().min(4096)]).to_ascii_lowercase();
+    let is_cloudflare_challenge = status == StatusCode::FORBIDDEN
+        || status == StatusCode::SERVICE_UNAVAILABLE
+        || cf_mitigated.contains("challenge")
+        || body_prefix.contains("just a moment")
+        || body_prefix.contains("__cf_chl")
+        || body_prefix.contains("cf-chl")
+        || body_prefix.contains("challenges.cloudflare.com")
+        || body_prefix.contains("enable javascript and cookies to continue");
+
+    if is_cloudflare_challenge
+        && (content_type_lc.contains("text/html") || body_prefix.contains("<!doctype html") || body_prefix.contains("<html"))
+    {
+        let payload = serde_json::json!({
+            "error": "Upstream presensi diblokir Cloudflare challenge (Just a moment). Proxy lokal tidak dapat melewati verifikasi JavaScript otomatis.",
+            "code": "EP_CLOUDFLARE_CHALLENGE",
+            "upstream_status": status.as_u16(),
+            "hint": "Coba lagi beberapa saat, pastikan server presensi dapat diakses langsung, atau gunakan jaringan/IP yang diizinkan. Untuk beberapa fitur /ep (mis. presensi web/Ponorogo) mungkin perlu bypass/akses manual bila challenge aktif."
+        });
+        let body = serde_json::to_vec(&payload).unwrap_or_else(|_| b"{\"error\":\"Cloudflare challenge\"}".to_vec());
+        let mut h = HeaderMap::new();
+        h.insert(header::CONTENT_TYPE, HeaderValue::from_static("application/json; charset=utf-8"));
+        h.insert(HeaderName::from_static("x-tetuko-ep-challenge"), HeaderValue::from_static("1"));
+        return (StatusCode::BAD_GATEWAY, h, body).into_response();
+    }
+
     (status, out_headers, bytes).into_response()
 }
 

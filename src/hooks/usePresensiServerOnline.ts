@@ -35,20 +35,25 @@ export function usePresensiServerOnline(pollMs = 30000): Status {
       const timeout = window.setTimeout(() => controller.abort(), 8000);
       try {
         // Probe melalui proxy lokal /ep (diteruskan ke server presensi profil aktif).
-        // Respons HTTP apa pun dari proxy lokal menandakan konektivitas app/proxy aktif.
+        // Respons sukses menandakan konektivitas app/proxy/upstream aktif.
+        // Challenge Cloudflare terdeteksi oleh proxy lokal (header x-tetuko-ep-challenge) -> anggap tidak terjangkau.
         const res = await fetch(apiUrl('/ep/'), {
           method: 'GET',
           cache: 'no-store',
           credentials: 'include',
           signal: controller.signal,
           headers: {
-            'Accept': 'text/html,application/xhtml+xml,*/*;q=0.5',
+            'Accept': 'text/html,application/xhtml+xml,application/json,*/*;q=0.5',
             ...profileHeaders(),
           },
         });
         if (res) {
-          setSafe('online');
-          return;
+          const isChallenge = res.headers.get('x-tetuko-ep-challenge') === '1';
+          if (!isChallenge && res.ok) {
+            setSafe('online');
+            return;
+          }
+          // non-ok/challenge: coba fallback /api/health untuk memastikan proxy lokal tetap hidup
         }
       } catch {
         // lanjut ke fallback health check

@@ -5,8 +5,8 @@
  * memantau waktu presensi baik saat pengguna berada di Beranda, Presensi,
  * maupun tab lainnya, serta saat aplikasi diminimalkan (background / AppImage).
  *
- * Menggunakan IndexedDB untuk membaca preset per-akun dan useAutoPresensi
- * untuk memicu eksekusi serta notifikasi native.
+ * - JS fallback: useAutoPresensi (web/non-native path atau fallback)
+ * - Native Tauri: sinkronisasi state ke Rust scheduler + listener event/notifikasi
  */
 
 import { useEffect, useState, useCallback } from 'react';
@@ -16,14 +16,16 @@ import { useAutoPresensi } from '../hooks/useAutoPresensi';
 import {
   bacaSemuaPreset,
   bacaSemuaStockFoto,
+  tulisLog as tulisLogOtomatisasi,
   type PresetOtomatisasi,
 } from '../lib/presetOtomatisasi';
 import { bacaStorage, tulisStorage } from '../lib/storageAman';
-import { isNativeAutomationPreferred, syncNativeAutomation, setNativeScheduler } from '../lib/nativeAutomation';
+import { isTauriRuntime, isNativeAutomationPreferred, syncNativeAutomation, setNativeScheduler } from '../lib/nativeAutomation';
 import { bacaTitik } from '../lib/lokasiTersimpan';
 import { getServerProfile } from '../lib/serverProfiles';
 import { bacaSemuaPreset as bacaSemuaPresetLegacy, bacaSemuaStockFoto as bacaSemuaStockFotoLegacy } from '../lib/presetAutomasi';
 import { AUTOMATION_AVAILABLE } from '../lib/deployMode';
+import { kirimNotifikasiNative } from '../lib/notifikasi';
 
 const KUNCI_STORAGE_PENJADWAL = 'presensi_penjadwal_otomatis_aktif';
 
@@ -95,6 +97,55 @@ function GlobalPresetSchedulerInner() {
   }, [muatPreset]);
 
   const nativePreferred = isNativeAutomationPreferred();
+
+  // Listener event automasi native (Tauri/Rust) -> fallback notifikasi & sinkronisasi log UI
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    let unsubs: Array<() => void> = [];
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { listen } = await import('@tauri-apps/api/event');
+        if (cancelled) return;
+
+        const u1 = await listen<any>('tetuko://automation-notify', async (ev) => {
+          const p = ev?.payload || {};
+          const title = String(p.title || 'TETUKO');
+          const body = String(p.body || '');
+          // Tampilkan juga via frontend (fallback bila notifikasi plugin native tidak muncul di beberapa lingkungan Linux)
+          try { await kirimNotifikasiNative(title, body); } catch {}
+        });
+        unsubs.push(u1);
+
+        const u2 = await listen<any>('tetuko://automation-executed', async (ev) => {
+          const p = ev?.payload || {};
+          try {
+            if (p?.profile_id && p?.username && p?.preset_id && p?.tanggal) {
+              await tulisLogOtomatisasi(String(p.username), {
+                presetId: String(p.preset_id),
+                tanggal: String(p.tanggal),
+                eksekusiPada: String(p.executed_at || new Date().toISOString()),
+                berhasil: !!p.success,
+                pesan: p.message ? String(p.message) : undefined,
+              } as any, String(p.profile_id));
+            }
+          } catch {}
+          // beri sinyal UI refresh preset/log
+          try { window.dispatchEvent(new CustomEvent('presensi-automasi-updated')); } catch {}
+          void muatPreset();
+        });
+        unsubs.push(u2);
+      } catch (e) {
+        console.warn('[GlobalPresetScheduler] gagal memasang listener automasi native', e);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      for (const u of unsubs) try { u(); } catch {}
+    };
+  }, [muatPreset]);
 
   useEffect(() => {
     if (!nativePreferred) return;

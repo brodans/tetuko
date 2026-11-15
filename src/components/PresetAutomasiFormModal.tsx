@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Clock, Calendar, Image as ImageIcon, Save, AlertTriangle } from 'lucide-react';
 import { PresetAutomasi, StockFoto, HariKerja, NAMA_HARI, URUTAN_HARI, MAX_STOCK_FOTO } from '../lib/presetAutomasi';
 import StockFotoManager from './ui/StockFotoManager';
+import TimePicker from './ui/TimePicker';
 import { useBackButton } from '../hooks/useBackButton';
 
 interface PresetAutomasiFormModalProps {
@@ -226,16 +227,14 @@ export default function PresetAutomasiFormModal({
                       <Clock className="w-3.5 h-3.5" /> Rentang Waktu Eksekusi (WIB)
                     </p>
                     <div className="flex items-end gap-3">
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <p className="text-[10px] text-slate-400 mb-1">Mulai</p>
-                        <input type="time" value={jamMulai} onChange={e => setJamMulai(e.target.value)}
-                          className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 dark:text-slate-100" />
+                        <TimePicker value={jamMulai} onChange={setJamMulai} className="w-full" />
                       </div>
                       <div className="text-slate-400 text-sm pb-2.5">–</div>
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <p className="text-[10px] text-slate-400 mb-1">Selesai</p>
-                        <input type="time" value={jamSelesai} onChange={e => setJamSelesai(e.target.value)}
-                          className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 dark:text-slate-100" />
+                        <TimePicker value={jamSelesai} onChange={setJamSelesai} className="w-full" />
                       </div>
                     </div>
                   </div>

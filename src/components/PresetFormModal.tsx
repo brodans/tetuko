@@ -3,6 +3,7 @@ import { Search, MapPin, Zap } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { Field, Input, ActionButton } from './ui/Surface';
 import Dropdown from './ui/Dropdown';
+import TimePicker from './ui/TimePicker';
 import StockFotoManager from './ui/StockFotoManager';
 import type { PresetOtomatisasi, TipePreset, HariKerja, StockFoto } from '../lib/presetOtomatisasi';
 import { LABEL_HARI, URUTAN_HARI } from '../lib/presetOtomatisasi';
@@ -181,9 +182,13 @@ export default function PresetFormModal({
 
         <Field label="Rentang Jam Eksekusi">
           <div className="flex items-center gap-2">
-            <Input type="time" value={form.jamMulai} onChange={e => set('jamMulai', e.target.value)} className="flex-1" />
+            <div className="flex-1 min-w-0">
+              <TimePicker value={form.jamMulai} onChange={v => set('jamMulai', v)} className="w-full" />
+            </div>
             <span className="text-slate-400 text-sm shrink-0">–</span>
-            <Input type="time" value={form.jamSelesai} onChange={e => set('jamSelesai', e.target.value)} className="flex-1" />
+            <div className="flex-1 min-w-0">
+              <TimePicker value={form.jamSelesai} onChange={v => set('jamSelesai', v)} className="w-full" />
+            </div>
           </div>
           <p className="text-[11px] text-slate-400 dark:text-slate-500 ml-1 mt-1">Preset dieksekusi pada waktu acak yang tetap dalam rentang ini.</p>
         </Field>

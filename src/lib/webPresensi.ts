@@ -43,8 +43,23 @@ async function req(url: string, opts: RequestInit = {}): Promise<Response> {
   }
 
   try {
-    return await doFetch(targetUrl);
+    const res = await doFetch(targetUrl);
+    // Proxy lokal dapat mengembalikan error terstruktur jika upstream diblokir Cloudflare challenge.
+    if (res.status === 502 && res.headers.get('x-tetuko-ep-challenge') === '1') {
+      try {
+        const j = await res.clone().json();
+        const msg = (j && (j.error || j.message)) ? String(j.error || j.message) : 'Upstream presensi diblokir Cloudflare challenge.';
+        const err = new Error(msg);
+        (err as any).epChallenge = true;
+        (err as any).status = 502;
+        throw err;
+      } catch (e2) {
+        if ((e2 as any)?.epChallenge) throw e2;
+      }
+    }
+    return res;
   } catch (e) {
+    if ((e as any)?.epChallenge) throw e;
     // Tauri: probe ulang port proxy lokal lalu retry sekali jika target masih lokal (127.0.0.1:14200-14205)
     if (isTauriRuntime()) {
       try {
