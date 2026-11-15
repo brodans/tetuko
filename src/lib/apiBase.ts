@@ -85,3 +85,48 @@ export function apiUrl(path: string): string {
     : `http://${configured}`;
   return `${base.replace(/\/$/, '')}${normalizedPath}`;
 }
+
+/**
+ * Fetch ke API/proxy lokal dengan retry probe port Tauri saat koneksi gagal.
+ * Membantu kasus startup race atau proxy lokal pindah ke port fallback (14201-14205).
+ */
+export async function tauriResilientFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const toUrlString = (v: RequestInfo | URL): string => {
+    if (typeof v === 'string') return v;
+    if (v instanceof URL) return v.toString();
+    try { return (v as Request).url; } catch { return String(v); }
+  };
+
+  if (isTauriRuntime()) {
+    try {
+      await ensureTauriApiBase();
+    } catch {
+      // lanjut coba fetch, akan di-retry bila gagal
+    }
+  }
+
+  const tryFetch = async (target: RequestInfo | URL) => await fetch(target, init);
+
+  try {
+    // Jika input string URL lokal Tauri, gunakan apiUrl hasil probe terbaru.
+    if (typeof input === 'string') {
+      return await tryFetch(rebaseTauriApiUrlToCurrent(input));
+    }
+    return await tryFetch(input);
+  } catch (e) {
+    if (!isTauriRuntime()) throw e;
+    try {
+      await ensureTauriApiBase(true);
+      if (typeof input === 'string') {
+        return await tryFetch(rebaseTauriApiUrlToCurrent(input));
+      }
+      const rebased = rebaseTauriApiUrlToCurrent(toUrlString(input));
+      if (input instanceof Request) {
+        return await tryFetch(new Request(rebased, input));
+      }
+      return await tryFetch(rebased);
+    } catch {
+      throw e;
+    }
+  }
+}

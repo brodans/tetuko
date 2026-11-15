@@ -1,6 +1,6 @@
 import { getTodayWIB } from './dateFormatter';
 import type { PresetOtomatisasi } from './presetOtomatisasi';
-import { apiUrl } from './apiBase';
+import { apiUrl, tauriResilientFetch } from './apiBase';
 /**
  * Pembungkus typed untuk seluruh panggilan JSON-RPC.
  *
@@ -715,7 +715,7 @@ function stripDataUrl(dataUrl: string): { base64: string; mimeType: string } {
 }
 
 async function postJson<T = any>(path: string, body: any): Promise<T> {
-  const res = await fetch(apiUrl(path), {
+  const res = await tauriResilientFetch(apiUrl(path), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

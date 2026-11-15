@@ -9,7 +9,7 @@
  *   3. Menormalkan envelope JSON-RPC.
  */
 
-import { apiUrl } from '../lib/apiBase';
+import { apiUrl, tauriResilientFetch } from '../lib/apiBase';
 
 import {
   type BaseRpcParam,
@@ -130,7 +130,7 @@ const kirimRpc = async <T = any>(
 
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await tauriResilientFetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -225,7 +225,7 @@ export const uploadMultipart = async <T = any>(
   });
 
   // ⚠️ Jangan set Content-Type: browser yang menambahkan boundary.
-  const response = await fetch(url, { method: 'POST', body: form, headers: { ...profileHeaders() } });
+  const response = await tauriResilientFetch(url, { method: 'POST', body: form, headers: { ...profileHeaders() } });
 
   const responseText = await response.text();
   let parsed: any = null;
@@ -257,7 +257,7 @@ export const isTauri = (): boolean => {
 };
 
 async function postPonorogo(path: string, body: any): Promise<any> {
-  const res = await fetch(apiUrl(path), {
+  const res = await tauriResilientFetch(apiUrl(path), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -325,7 +325,7 @@ export const fetchAbsensiLog = async (queryParams: URLSearchParams): Promise<any
 
   // 1) Local proxy route (dev-server / tauri)
   try {
-    const res = await fetch(apiUrl(`/api/absensi-log-proxy?${qp.toString()}`), {
+    const res = await tauriResilientFetch(apiUrl(`/api/absensi-log-proxy?${qp.toString()}`), {
       headers: { 'Accept': 'application/json' },
     });
     const data = await readJsonSafe(res);
@@ -338,7 +338,7 @@ export const fetchAbsensiLog = async (queryParams: URLSearchParams): Promise<any
   // 2) Fallback via EP proxy path
   const path = `/api/absensi-log/unor/${encodeURIComponent(unor)}/${encodeURIComponent(start)}/${encodeURIComponent(end)}/${encodeURIComponent(nama)}/${encodeURIComponent(nip)}?page.page=${page}&page.size=${size}&page=${page}&size=${size}`;
   const url = apiUrl(`/ep${path}`);
-  const res = await fetch(url, { headers: { 'Accept': 'application/json', ...profileHeaders() } });
+  const res = await tauriResilientFetch(url, { headers: { 'Accept': 'application/json', ...profileHeaders() } });
   const data = await readJsonSafe(res);
   if (!res.ok && data && !data.error) return { error: `HTTP ${res.status}`, ...(typeof data === 'object' ? data : {}) };
   return data;
@@ -376,7 +376,7 @@ export const fetchReport = async (pathQuery: string): Promise<string> => {
   }
 
   // Fetch via EP proxy and return as data URL for download/open
-  const res = await fetch(apiUrl(`/ep${targetPath}`), { headers: { 'Accept': '*/*', ...profileHeaders() } });
+  const res = await tauriResilientFetch(apiUrl(`/ep${targetPath}`), { headers: { 'Accept': '*/*', ...profileHeaders() } });
   if (!res.ok) throw new Error(`Gagal memuat laporan (${res.status})`);
   const ct = res.headers.get('content-type') || (fileExt === 'xls' ? 'application/vnd.ms-excel' : 'application/pdf');
   const buf = await res.arrayBuffer();

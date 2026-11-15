@@ -7,7 +7,7 @@ import { formatCompactDateTime } from '../lib/dateFormatter';
 import LazyImage from '../components/ui/LazyImage';
 import { useBackButton } from '../hooks/useBackButton';
 import { loadOpdList, type OPD } from '../data/opd';
-import { apiUrl } from '../lib/apiBase';
+import { apiUrl, tauriResilientFetch } from '../lib/apiBase';
 
 export default function LogPresensiInstansi() {
   const { pegawai, config, instansiLogState, setInstansiLogState, tabPermissions, userRole } = useAppContext();
@@ -159,7 +159,7 @@ export default function LogPresensiInstansi() {
     }
 
     try {
-      const res = await fetch(apiUrl(`/api/absensi-log-proxy?${queryParams.toString()}`), {
+      const res = await tauriResilientFetch(apiUrl(`/api/absensi-log-proxy?${queryParams.toString()}`), {
         headers: { Accept: 'application/json' },
       });
       if (!res.ok) {

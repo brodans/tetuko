@@ -3,7 +3,7 @@ import { getServerSessionCache, setServerSessionCache, clearServerSessionCache }
 import { absenTimeoutMs } from './presensiContract';
 import { fotoProfileValid } from './viewModels';
 import { getServerProfile, type ServerProfileId } from './serverProfiles';
-import { apiUrl } from './apiBase';
+import { apiUrl, tauriResilientFetch } from './apiBase';
 
 const KELUAR_KEY_PREFIX = 'presensi_server_keluar_';
 const IMEI_KEY_PREFIX = 'presensi_imei_';
@@ -190,7 +190,7 @@ export async function tokenMasihValid(ctx: { apiKey: string; imei: string }, opt
 
 async function loginPonorogo(nip: string, password: string, imei: string): Promise<HasilAutoLogin> {
   try {
-    const res = await fetch(apiUrl('/api/proxy'), {
+    const res = await tauriResilientFetch(apiUrl('/api/proxy'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ endpoint: '/login/do_LoginMobile', payload: { username: nip, password, versi: '2.0.0' } }),
