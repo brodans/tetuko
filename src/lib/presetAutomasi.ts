@@ -120,7 +120,7 @@ export async function bacaSemuaPreset(username: string): Promise<PresetAutomasi[
   return row?.presets ?? [];
 }
 
-async function simpanSemuaPreset(username: string, presets: PresetAutomasi[]): Promise<void> {
+export async function simpanSemuaPreset(username: string, presets: PresetAutomasi[]): Promise<void> {
   const akun = kunciAkun(username);
   const db = await bukaDatabase();
   const tx = db.transaction(STORE_PRESET, 'readwrite');

@@ -25,6 +25,7 @@ import { kirimNotifikasiNative } from '../lib/notifikasi';
 import { loadAppAuthSession } from '../lib/appAuthSession';
 import { loadAllServerCreds } from '../lib/loginCredsStore';
 import { loadNativeSessionContext } from '../lib/nativeSessionContextStore';
+import { syncAllCloudToLocal } from '../lib/cloudAutomationSync';
 
 const KUNCI_STORAGE_PENJADWAL = 'presensi_penjadwal_otomatis_aktif';
 
@@ -154,6 +155,8 @@ function GlobalPresetSchedulerInner() {
   const syncAllToNative = useCallback(async () => {
     if (!isTauriRuntime()) return;
     try {
+      // Tarik/push sinkronisasi cloud (Firestore) <-> lokal untuk semua akun tersimpan agar native memakai data terbaru
+      try { await syncAllCloudToLocal(); } catch {}
       const appSession = loadAppAuthSession();
       const accountKey = (appSession?.user?.username || (appSession?.role === 'admin' ? 'admin' : 'user')).toLowerCase();
       const allUnifiedStock = await bacaSemuaStockFoto().catch(() => [] as any[]);
@@ -180,7 +183,7 @@ function GlobalPresetSchedulerInner() {
           if (!uname) continue;
           const key = `${pid}::${uname}`;
           const unified = await bacaSemuaPreset(uname, pid).catch(() => [] as PresetOtomatisasi[]);
-          const locations = await bacaTitik(uname).catch(() => []);
+          const locations = await bacaTitik(uname, pid).catch(() => []);
           let legacy: any[] = [];
           if (profileMeta.mode === 'ponorogo-absensi') {
             legacy = await bacaSemuaPresetLegacy(uname).catch(() => []);
