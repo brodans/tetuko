@@ -9,7 +9,12 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{net::SocketAddr, sync::Arc};
-use tauri::Manager;
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    Manager, WindowEvent,
+};
+use tauri_plugin_autostart::ManagerExt;
 mod automation;
 use tower_http::cors::{AllowHeaders, AllowOrigin, CorsLayer};
 
@@ -903,6 +908,58 @@ async fn start_local_server() {
     }
 }
 
+fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
+    let show_i = MenuItem::with_id(app, "show", "Tampilkan TETUKO", true, None::<&str>)?;
+    let hide_i = MenuItem::with_id(app, "hide", "Sembunyikan ke Tray", true, None::<&str>)?;
+    let quit_i = MenuItem::with_id(app, "quit", "Keluar", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&show_i, &hide_i, &quit_i])?;
+
+    let mut builder = TrayIconBuilder::with_id("main-tray")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .tooltip("TETUKO - Presensi & Automasi")
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "show" => {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.unminimize();
+                    let _ = w.set_focus();
+                }
+            }
+            "hide" => {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.hide();
+                }
+            }
+            "quit" => {
+                app.exit(0);
+            }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+                let app = tray.app_handle();
+                if let Some(w) = app.get_webview_window("main") {
+                    let visible = w.is_visible().unwrap_or(false);
+                    if visible {
+                        let _ = w.hide();
+                    } else {
+                        let _ = w.show();
+                        let _ = w.unminimize();
+                        let _ = w.set_focus();
+                    }
+                }
+            }
+        });
+
+    if let Some(icon) = app.default_window_icon().cloned() {
+        builder = builder.icon(icon);
+    }
+
+    let _tray = builder.build(app)?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -911,6 +968,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--minimized"]),
+        ))
         .invoke_handler(tauri::generate_handler![
             absensi_image_proxy,
             automation::automation_sync,
@@ -924,7 +985,36 @@ pub fn run() {
             tauri::async_runtime::spawn(async {
                 start_local_server().await;
             });
+
+            // System tray + background mode (tutup jendela => sembunyi ke tray, proses tetap aktif)
+            if let Err(e) = setup_tray(app) {
+                eprintln!("[TETUKO] Gagal membuat system tray: {}", e);
+            }
+
+            // Aktifkan autostart agar automasi/notifikasi dapat berjalan sejak startup sistem (best effort)
+            {
+                let autostart = app.autolaunch();
+                if !autostart.is_enabled().unwrap_or(false) {
+                    let _ = autostart.enable();
+                }
+            }
+
+            // Jika dijalankan dengan argumen --minimized (autostart), sembunyikan jendela utama
+            let minimized = std::env::args().any(|a| a == "--minimized");
+            if minimized {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.hide();
+                }
+            }
+
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                // Biarkan aplikasi tetap berjalan di background/tray untuk automasi & notifikasi
+                let _ = window.hide();
+                api.prevent_close();
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running TETUKO");

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Server, LogIn, User, Lock, Eye, EyeOff, Moon, Sun, ArrowLeft, ShieldCheck, RefreshCw, Loader2, KeyRound, CheckCircle2, Settings, LogOut, Zap } from 'lucide-react';
 import ServerHubPresetManager from './ServerHubPresetManager';
+import { AUTOMATION_AVAILABLE } from '../lib/deployMode';
 import { useAppContext } from '../context/AppContext';
 import { SERVER_PROFILES, type ServerProfileId } from '../lib/serverProfiles';
 import { loginServerPusat, tandaiAktifServer, imeiStabil, simpanImei } from '../lib/serverAutoLogin';
@@ -308,24 +309,26 @@ export default function ServerHub({ isDarkMode, toggleDarkMode, onAppLogout }: P
           </div>
 
           <div className="pt-5">
-            <div className="mb-4 flex items-center gap-1 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-100/70 dark:bg-slate-800/50 p-1">
-              <button
-                type="button"
-                onClick={() => setHubTab('server')}
-                className={`flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${hubTab === 'server' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm border border-slate-200 dark:border-slate-700' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100'}`}
-              >
-                <Server className="w-4 h-4" /> Server Presensi
-              </button>
-              <button
-                type="button"
-                onClick={() => setHubTab('preset')}
-                className={`flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${hubTab === 'preset' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm border border-slate-200 dark:border-slate-700' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100'}`}
-              >
-                <Zap className="w-4 h-4" /> Manajemen Preset
-              </button>
-            </div>
+            {AUTOMATION_AVAILABLE && (
+              <div className="mb-4 flex items-center gap-1 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-100/70 dark:bg-slate-800/50 p-1">
+                <button
+                  type="button"
+                  onClick={() => setHubTab('server')}
+                  className={`flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${hubTab === 'server' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm border border-slate-200 dark:border-slate-700' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100'}`}
+                >
+                  <Server className="w-4 h-4" /> Server
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHubTab('preset')}
+                  className={`flex-1 inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${hubTab === 'preset' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm border border-slate-200 dark:border-slate-700' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100'}`}
+                >
+                  <Zap className="w-4 h-4" /> Preset
+                </button>
+              </div>
+            )}
 
-            {hubTab === 'preset' ? (
+            {AUTOMATION_AVAILABLE && hubTab === 'preset' ? (
               <ServerHubPresetManager accountKey={accountKey} />
             ) : !selected ? (
               <div className="space-y-4">

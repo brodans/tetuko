@@ -175,8 +175,16 @@ export default function PresetFormModal({
         </Field>
 
         {requiresWorkCode && (
-          <Field label="Workcode" required>
-            <Dropdown value={form.workcodeId} onChange={val => set('workcodeId', val)} opsi={opsiWorkcode} placeholder="— Pilih workcode —" searchable />
+          <Field label="Workcode" required hint={opsiWorkcode.length === 0 ? 'Daftar workcode tidak tersedia di sini. Isi ID/kode workcode secara manual jika diketahui.' : undefined}>
+            {opsiWorkcode.length > 0 ? (
+              <Dropdown value={form.workcodeId} onChange={val => set('workcodeId', val)} opsi={opsiWorkcode} placeholder="— Pilih workcode —" searchable />
+            ) : (
+              <Input
+                placeholder="Masukkan ID/kode workcode"
+                value={form.workcodeId}
+                onChange={e => set('workcodeId', e.target.value)}
+              />
+            )}
           </Field>
         )}
 

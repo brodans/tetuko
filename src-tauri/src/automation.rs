@@ -303,6 +303,67 @@ fn get_str_or(map: &serde_json::Map<String, Value>, keys: &[&str], fallback: &st
     if v.is_empty() { fallback.to_string() } else { v }
 }
 
+fn preset_checktype_label(tipe: &str) -> &'static str {
+    match tipe {
+        "pulang" => "Pulang",
+        "custom" | "siang" => "Siang",
+        _ => "Datang",
+    }
+}
+
+async fn bkd_already_checked_in(mgr: &AutomationManager, profile: &ProfileAutomation, preset: &UnifiedPreset, tanggal: &str) -> bool {
+    let Some(ctx) = profile.bkd.as_ref() else { return false; };
+    let gateway = if !profile.gateway_url.is_empty() {
+        profile.gateway_url.clone()
+    } else {
+        "https://presensi.bkd.jatimprov.go.id/service".to_string()
+    };
+    let param = json!({
+        "tgl": tanggal,
+        "page": 1,
+        "limit": 50,
+        "api_key": ctx.api_key,
+        "last_latlong": ctx.last_latlong,
+        "imei": ctx.imei,
+    });
+    let envelope = json!({
+        "jsonrpc": 2,
+        "method": "POST",
+        "version": RPC_VERSION,
+        "object": "history_absen",
+        "param": param,
+    });
+    let resp = mgr.client.post(&gateway)
+        .header("Content-Type", "application/json; charset=UTF-8")
+        .header("Accept", "application/json")
+        .header("User-Agent", "okhttp/4.12.0")
+        .json(&envelope)
+        .send()
+        .await;
+    let Ok(r) = resp else { return false; };
+    if !r.status().is_success() { return false; }
+    let Ok(text) = r.text().await else { return false; };
+    let Ok(v) = serde_json::from_str::<Value>(&text) else { return false; };
+
+    let target = preset_checktype_label(&preset.tipe).to_ascii_lowercase();
+    let rows = if let Some(arr) = v.as_array() { Some(arr.clone()) }
+        else if let Some(arr) = v.get("result").and_then(|x| x.as_array()) { Some(arr.clone()) }
+        else if let Some(arr) = v.get("data").and_then(|x| x.as_array()) { Some(arr.clone()) }
+        else { None };
+
+    if let Some(rows) = rows {
+        for row in rows {
+            let ct = row.get("checktype").and_then(|x| x.as_str()).unwrap_or("").to_ascii_lowercase();
+            if ct.contains(&target) { return true; }
+            // fallback umum: jika ada teks yang jelas mengindikasikan jenis sudah ada
+            if target == "datang" && (ct.contains("masuk") || ct == "0") { return true; }
+            if target == "pulang" && ct == "3" { return true; }
+            if target == "siang" && (ct == "2" || ct.contains("custom")) { return true; }
+        }
+    }
+    false
+}
+
 async fn send_notification(app: &AppHandle, title: &str, body: &str) {
     let payload = json!({"title": title, "body": body, "app": "TETUKO"});
     let _ = app.emit("tetuko://automation-notify", payload);
@@ -357,7 +418,7 @@ async fn submit_bkd(app: &AppHandle, mgr: &AutomationManager, profile_key: &str,
         }
     }
 
-    // dedupe
+    // dedupe lokal
     {
         let st = mgr.state.read().await;
         if let Some(day) = st.runtime.execution_log.get(&log_key) {
@@ -365,6 +426,26 @@ async fn submit_bkd(app: &AppHandle, mgr: &AutomationManager, profile_key: &str,
                 if e.berhasil { return (false, "__SKIP_DONE__".into(), e.lokasi_dipilih.clone()); }
             }
         }
+    }
+
+    // Cek status absensi hari ini di server (hindari eksekusi ganda jika sudah absen manual/otomatis sebelumnya)
+    if bkd_already_checked_in(mgr, profile, preset, &tanggal).await {
+        let msg = format!("Sudah ada absensi {} hari ini, dilewati.", preset_checktype_label(&preset.tipe));
+        {
+            let mut st = mgr.state.write().await;
+            let day = st.runtime.execution_log.entry(log_key.clone()).or_default();
+            day.insert(preset.id.clone(), ExecutionLogEntry {
+                preset_id: preset.id.clone(),
+                tanggal: tanggal.clone(),
+                berhasil: true,
+                pesan: Some(msg.clone()),
+                eksekusi_pada: Utc::now().timestamp_millis(),
+                lokasi_dipilih: None,
+                foto_dipilih: None,
+            });
+        }
+        mgr.save().await;
+        return (true, msg, None);
     }
 
     // location

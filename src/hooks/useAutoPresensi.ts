@@ -30,7 +30,7 @@ import {
   type PresetOtomatisasi,
 } from '../lib/presetOtomatisasi';
 import { getTodayWIB, getNowWIBTime } from '../lib/dateFormatter';
-import { rpcAbsen } from '../lib/apiCalls';
+import { rpcAbsen, rpcHistoryAbsen } from '../lib/apiCalls';
 import { ABSEN_CHECK_TYPE, formatLatLong } from '../lib/presensiContract';
 import type { ServerContext } from '../lib/apiCalls';
 import { bacaTitik } from '../lib/lokasiTersimpan';
@@ -179,6 +179,25 @@ async function cekDanEksekusiPreset(
       // BKD RPC mode
       if (!lokasiId) throw new Error('Tidak ada lokasi valid dalam pool preset.');
       if (!preset.workcodeId) throw new Error('Workcode preset belum dipilih.');
+
+      // Cek riwayat absensi hari ini: jika sudah ada absensi jenis ini, lewati (hindari eksekusi ganda)
+      try {
+        const history = await rpcHistoryAbsen(ctxDenganLokasi, { tgl: tanggalHariIni, page: 1, limit: 50 } as any);
+        const target = preset.tipe === 'pulang' ? 'pulang' : preset.tipe === 'custom' ? 'siang' : 'datang';
+        const sudahAda = (history || []).some((h: any) => {
+          const ct = String(h?.checktype || h?.kode || '').toLowerCase();
+          return ct.includes(target) || (target === 'datang' && ct.includes('masuk'));
+        });
+        if (sudahAda) {
+          const pesan = `Sudah ada absensi ${target} hari ini, dilewati.`;
+          await tulisLog(username, { presetId: preset.id, tanggal: tanggalHariIni, lokasiDipilih: lokasiId, eksekusiPada: Date.now(), berhasil: true, pesan }, profileId);
+          await kirimNotifikasiNative('ℹ️ Presensi Otomatis Dilewati', `${preset.nama} — ${pesan}`);
+          continue;
+        }
+      } catch {
+        // jika cek gagal, lanjutkan eksekusi normal
+      }
+
       const result = await rpcAbsen(ctxDenganLokasi, {
         checkType: checkTypeFromTipe(preset.tipe),
         workCode: preset.workcodeId,
