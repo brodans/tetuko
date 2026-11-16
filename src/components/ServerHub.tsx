@@ -323,7 +323,7 @@ export default function ServerHub({ isDarkMode, toggleDarkMode, onAppLogout }: P
 
   return (
     <div className="fixed inset-0 overflow-auto bg-slate-200 dark:bg-[#0a0f1c] p-4 sm:p-8">
-      <div className="absolute inset-0 z-0 pointer-events-none">
+      <div className="fixed inset-0 z-0 pointer-events-none">
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#00000014_1px,transparent_1px),linear-gradient(to_bottom,#00000014_1px,transparent_1px)] bg-[size:24px_24px] dark:bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)]" />
       </div>
       <button
@@ -400,7 +400,7 @@ export default function ServerHub({ isDarkMode, toggleDarkMode, onAppLogout }: P
               <ServerHubPresetManager accountKey={accountKey} />
             ) : !selected ? (
               <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {visibleProfiles.map((p) => {
                     const saved = savedMap[p.id];
                     return (
