@@ -214,6 +214,15 @@ function GlobalPresetSchedulerInner() {
               }
             : undefined;
 
+          const legacyStockMapped = (legacyStockAll as any[]).map((f: any) => ({ id: String(f.id), nama: String(f.nama || ''), dataUrl: String(f.dataUrl || '') }));
+          const unifiedStockMapped = buildUnifiedStock(unified);
+          const stockMap = new Map<string, any>();
+          if (profileMeta.mode === 'ponorogo-absensi') {
+            for (const f of legacyStockMapped) stockMap.set(String(f.id), f);
+            for (const f of unifiedStockMapped) stockMap.set(String(f.id), f);
+          } else {
+            for (const f of unifiedStockMapped) stockMap.set(String(f.id), f);
+          }
           profilesPayload[key] = {
             profile_id: pid,
             mode: profileMeta.mode,
@@ -228,9 +237,7 @@ function GlobalPresetSchedulerInner() {
             locations: (locations as any[]).map((l: any) => ({
               id: String(l.id), nama: String(l.nama || ''), latitude: Number(l.latitude), longitude: Number(l.longitude),
             })),
-            stock_photos: profileMeta.mode === 'ponorogo-absensi'
-              ? (legacyStockAll as any[]).map((f: any) => ({ id: String(f.id), nama: String(f.nama || ''), dataUrl: String(f.dataUrl || '') }))
-              : buildUnifiedStock(unified),
+            stock_photos: Array.from(stockMap.values()),
             legacy_ponorogo_presets: legacy,
           };
         }

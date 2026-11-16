@@ -927,35 +927,37 @@ async fn submit_ponorogo_unified(
             } else if v.get("success") == Some(&Value::Bool(false))
                 || v.get("status") == Some(&Value::Bool(false))
             {
-                (
-                    false,
-                    v.get("message")
-                        .and_then(|x| x.as_str())
-                        .unwrap_or("Server menolak presensi")
-                        .to_string(),
-                )
-            } else {
-                let m = v
+                let msg_text = v
                     .get("message")
                     .and_then(|x| x.as_str())
-                    .unwrap_or("")
-                    .to_lowercase();
-                if m.contains("berhasil") || m.contains("sukses") {
-                    (
-                        true,
-                        v.get("message")
-                            .and_then(|x| x.as_str())
-                            .unwrap_or("Presensi berhasil")
-                            .to_string(),
-                    )
+                    .unwrap_or("Server menolak presensi")
+                    .to_string();
+                let m = msg_text.to_lowercase();
+                if m.contains("sudah absen")
+                    || m.contains("sudah melakukan")
+                    || m.contains("sudah presensi")
+                    || m.contains("sudah hadir")
+                {
+                    (true, msg_text)
                 } else {
-                    (
-                        false,
-                        v.get("message")
-                            .and_then(|x| x.as_str())
-                            .unwrap_or("Respons server tidak dikenali")
-                            .to_string(),
-                    )
+                    (false, msg_text)
+                }
+            } else {
+                let msg_text = v
+                    .get("message")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("Respons server tidak dikenali")
+                    .to_string();
+                let m = msg_text.to_lowercase();
+                if m.contains("berhasil")
+                    || m.contains("sukses")
+                    || m.contains("sudah absen")
+                    || m.contains("sudah melakukan")
+                    || m.contains("sudah presensi")
+                {
+                    (true, msg_text)
+                } else {
+                    (false, msg_text)
                 }
             }
         }
