@@ -324,7 +324,7 @@ export default function ImageLightbox({
       role="dialog"
       aria-modal="true"
       aria-label={currentTitle || 'Pratinjau Foto'}
-      className="image-lightbox modal-layer fixed inset-0 z-[9999] flex flex-col items-center justify-between bg-slate-950/95 backdrop-blur-md p-4 transition-all duration-300 select-none animate-in fade-in touch-none overscroll-contain"
+      className="image-lightbox modal-layer fixed inset-0 z-[9999] flex flex-col items-center justify-between bg-slate-950/95 p-4 transition-all duration-300 select-none animate-in fade-in touch-none overscroll-contain"
     >
       {/* Top Header */}
       <div className="w-full max-w-4xl flex items-center justify-between z-10 py-3 border-b border-slate-800/60 shrink-0">

@@ -420,7 +420,7 @@ export default function BerandaPonorogo() {
       <AnimatePresence>
         {isProfilePhotoViewerOpen && (
           <div className="modal-layer fixed inset-0 z-[150] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsProfilePhotoViewerOpen(false)} className="absolute inset-0 bg-slate-950/80 backdrop-blur-md" />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsProfilePhotoViewerOpen(false)} className="absolute inset-0 bg-slate-950/80" />
             <motion.div initial={{ opacity: 0, scale: 0.95, y: 15 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 15 }} transition={{ type: 'spring', duration: 0.3 }} className="relative w-full max-w-sm bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800/80 overflow-hidden flex flex-col items-center text-center z-10">
               <div className="w-full flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-5">
                 <span className="font-bold text-slate-800 dark:text-white text-sm">Foto Profil</span>
@@ -446,7 +446,7 @@ export default function BerandaPonorogo() {
                 <div className={`w-full mt-4 p-3.5 rounded-xl text-xs font-semibold shadow-sm border ${photoActionMessage.type === 'success' ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30' : 'bg-red-50 text-red-800 border-red-200 dark:bg-red-950/20 dark:text-red-400 dark:border-red-900/30'}`}>{photoActionMessage.text}</div>
               )}
               {isUploadingPhoto && (
-                <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px] flex items-center justify-center z-20">
+                <div className="absolute inset-0 bg-slate-950/40 flex items-center justify-center z-20">
                   <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-xl flex items-center gap-3"><div className="w-5 h-5 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin" /><span className="text-xs font-bold text-slate-700 dark:text-slate-200">Memproses...</span></div>
                 </div>
               )}
@@ -459,7 +459,7 @@ export default function BerandaPonorogo() {
       <AnimatePresence>
         {isCropperOpen && (
           <div className="modal-layer fixed inset-0 z-[160] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-950/85" />
             <motion.div initial={{ opacity: 0, scale: 0.95, y: 15 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 15 }} className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800 z-10 flex flex-col items-center">
               <div className="w-full flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-3 mb-5">
                 <span className="font-bold text-slate-800 dark:text-white text-sm">Sesuaikan Foto</span>
@@ -486,7 +486,7 @@ export default function BerandaPonorogo() {
       <AnimatePresence>
         {isUpdateImeiOpen && (
           <div className="modal-layer fixed inset-0 z-[200] flex items-center justify-center p-4 overflow-y-auto">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} onClick={() => !imeiLoading && setIsUpdateImeiOpen(false)} className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} onClick={() => !imeiLoading && setIsUpdateImeiOpen(false)} className="absolute inset-0 bg-slate-950/70" />
             <motion.div initial={{ opacity: 0, scale: 0.97, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97, y: 8 }} transition={{ duration: 0.18, ease: 'easeOut' }} className="relative w-full max-w-md my-auto bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 z-10 max-h-[min(90vh,560px)] flex flex-col overflow-hidden" role="dialog" aria-modal="true">
               <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
                 <div className="flex items-center gap-2.5 min-w-0">

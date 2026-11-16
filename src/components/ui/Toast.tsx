@@ -82,7 +82,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, x: 40, scale: 0.96 }}
                 transition={{ duration: 0.2, ease: 'easeOut' }}
-                className={`pointer-events-auto w-full sm:w-auto sm:max-w-md flex items-start gap-3 rounded-xl border ${ring} bg-white/95 dark:bg-slate-800/95 backdrop-blur px-4 py-3 shadow-xl`}
+                className={`pointer-events-auto w-full sm:w-auto sm:max-w-md flex items-start gap-3 rounded-xl border ${ring} bg-white/95 dark:bg-slate-800/95 px-4 py-3 shadow-xl`}
                 role="status"
               >
                 <Icon className={`w-5 h-5 shrink-0 mt-0.5 ${iconColor}`} />

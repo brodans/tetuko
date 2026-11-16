@@ -492,7 +492,7 @@ function LokasiPanel() {
         <span>Total: {dataLokasi.length} lokasi</span>
       </div>
       {selectedMap && (
-        <div className="modal-layer fixed inset-0 bg-slate-900/70 backdrop-blur-md flex items-center justify-center p-4 z-50">
+        <div className="modal-layer fixed inset-0 bg-slate-900/70 flex items-center justify-center p-4 z-50">
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900/40 shrink-0">
               <div className="flex items-center gap-3">
@@ -756,7 +756,7 @@ function DetailPanel({ node }: { node: TreeNode }) {
 
       {/* Map Modal */}
       {mapModal && (
-        <div className="modal-layer fixed inset-0 bg-slate-900/70 backdrop-blur-md flex items-center justify-center p-4 z-[60]">
+        <div className="modal-layer fixed inset-0 bg-slate-900/70 flex items-center justify-center p-4 z-[60]">
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900/40 shrink-0">
               <div className="flex items-center gap-3">

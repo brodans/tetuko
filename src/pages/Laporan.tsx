@@ -1581,7 +1581,7 @@ function PonorogoLaporanPage() {
 
       {reportModalOpen && reportBlob && reportUrl && (
         <div
-          className={`report-modal-overlay modal-layer fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 backdrop-blur-sm ${
+          className={`report-modal-overlay modal-layer fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 ${
             reportModalFullscreen ? 'is-fullscreen p-0' : 'p-2 sm:p-4'
           }`}
           role="dialog"

@@ -126,7 +126,7 @@ function Modal({ judul, onTutup, children, lebar = false, kotak = false, mediaMo
   }, []);
   const maxW = lebar ? 'max-w-4xl' : kotak ? 'max-w-sm' : 'max-w-lg';
   return createPortal(
-    <div className={`fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 transition-all duration-150 ${visible ? 'bg-black/40 backdrop-blur-[2px]' : 'bg-black/0 backdrop-blur-none'}`} onClick={tutup} role="presentation">
+    <div className={`fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 transition-all duration-150 ${visible ? 'bg-black/40' : 'bg-black/0'}`} onClick={tutup} role="presentation">
       <div className={`relative bg-white dark:bg-slate-900 rounded-2xl flex flex-col max-h-[92vh] w-full ${maxW} border border-slate-200/80 dark:border-slate-700/80 shadow-2xl shadow-black/20 dark:shadow-black/60 transition-all duration-200 ease-out ${visible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-[0.97] translate-y-2'}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-label={judul}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
           <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate pr-4">{judul}</h3>

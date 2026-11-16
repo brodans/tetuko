@@ -15,7 +15,7 @@ import { createPortal } from 'react-dom';
  * Modal ini tadinya memakai `AnimatePresence` + `motion.div`. Itu
  * terlalu berat untuk sesuatu yang dibuka terus-menerus, karena tiga hal:
  *
- * 1. `backdrop-blur-sm` pada overlay — `backdrop-filter` memaksa browser
+ * 1. `` pada overlay — `backdrop-filter` memaksa browser
  *    mengambil ulang dan mengaburkan seluruh isi layar **di setiap frame**.
  * 2. `scale` pada panel — `transform: scale()` memicu perhitungan ulang
  *    isi panel tiap frame; `translate` tidak.

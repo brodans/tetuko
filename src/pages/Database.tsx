@@ -376,7 +376,7 @@ export default function Database() {
         const closeDetail = () => { biodataRequestRef.current += 1; setSelectedDetailPegawai(null); setSelectedDetailBiodata(null); setPegawaiPhoto(null); setPhotoLoading(false); setPhotoError(false); setPhotoMeta(null); setLightboxOpen(false); };
         return (
         <>
-        <div className="modal-layer fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 z-50 animate-fade-in">
+        <div className="modal-layer fixed inset-0 bg-slate-900/70 flex items-center justify-center p-3 sm:p-6 z-50 animate-fade-in">
           <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl w-full max-w-5xl overflow-hidden transform transition-all animate-scale-up flex flex-col max-h-[92vh]">
             <div className="px-5 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-800 shrink-0">
               <div className="min-w-0">
@@ -625,7 +625,7 @@ export default function Database() {
 
       {/* OPD SEARCH MODAL */}
       {isOpdModalOpen && (
-        <div className="modal-layer fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+        <div className="modal-layer fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-scale-up flex flex-col max-h-[75vh]">
             <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-900/40 shrink-0">
               <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2 text-sm uppercase tracking-wider">

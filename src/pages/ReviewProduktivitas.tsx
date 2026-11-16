@@ -1228,7 +1228,7 @@ export default function ReviewProduktivitas() {
 
       {/* 4. DETAIL MODAL DIALOG */}
       {selectedActivity && (
-        <div className="modal-layer fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+        <div className="modal-layer fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 animate-fade-in">
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar flex flex-col">
             
             {/* Modal Header */}
@@ -1419,7 +1419,7 @@ export default function ReviewProduktivitas() {
 
       {/* 5. BATCH PROGRESS MODAL */}
       {batchModalOpen && (
-        <div className="modal-layer fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-fade-in">
+        <div className="modal-layer fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 animate-fade-in">
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl max-w-lg w-full overflow-hidden flex flex-col">
             
             {/* Header */}

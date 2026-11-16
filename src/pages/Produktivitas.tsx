@@ -1200,7 +1200,7 @@ export default function Produktivitas() {
 
         {/* ── Modal Pilih Tupoksi ── */}
         {showTupoksiModal && (
-          <div className="modal-layer fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="modal-layer fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60">
             <div className="w-full max-w-lg bg-white dark:bg-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
               <div className="p-5 border-b border-slate-100 dark:border-slate-700/50 flex justify-between items-center">
                 <h4 className="font-bold text-lg text-slate-800 dark:text-white">Pilih Tupoksi</h4>

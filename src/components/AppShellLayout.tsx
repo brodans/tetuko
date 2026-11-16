@@ -212,7 +212,7 @@ export default function AppShellLayout({
 
       {/* Main */}
       <div className={`flex-1 flex flex-col min-w-0 h-full min-h-0 relative ${isMobileMenuOpen ? 'pointer-events-none lg:pointer-events-auto' : ''}`}>
-        <header className="poni-header h-[56px] bg-white/90 dark:bg-[#0B1120]/90 backdrop-blur border-b border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between gap-3 transition-colors duration-300 shrink-0 z-30 px-4 sm:px-6 relative">
+        <header className="poni-header h-[56px] bg-white/90 dark:bg-[#0B1120]/90 border-b border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between gap-3 transition-colors duration-300 shrink-0 z-30 px-4 sm:px-6 relative">
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <button
               onClick={() => setIsMobileMenuOpen(true)}

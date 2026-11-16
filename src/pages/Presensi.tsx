@@ -1929,7 +1929,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, timeoutMsg: string): Pr
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setIsConfirmOpen(false)}
-            className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
+            className="absolute inset-0 bg-slate-950/80"
           />
           
           {/* Modal Card */}
