@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bell, CheckCircle2, Clock, Loader2, MapPin, Power, PowerOff, RefreshCw, Trash2, Zap, AlertTriangle, CalendarDays, Camera, Plus, Pencil } from 'lucide-react';
+import { Bell, CheckCircle2, Clock, Loader2, MapPin, Power, PowerOff, RefreshCw, Trash2, Zap, AlertTriangle, CalendarDays, Camera, Plus, Pencil, Users } from 'lucide-react';
 import { SERVER_PROFILES, getServerProfile, type ServerProfileId } from '../lib/serverProfiles';
-import { loadServerCreds } from '../lib/loginCredsStore';
+import { loadAllServerCreds } from '../lib/loginCredsStore';
 import { getTodayWIB, getNowWIBTime } from '../lib/dateFormatter';
 import {
   bacaSemuaPreset,
@@ -43,16 +43,20 @@ import { kirimNotifikasiNative } from '../lib/notifikasi';
 import PresetFormModal from './PresetFormModal';
 import PresetAutomasiFormModal from './PresetAutomasiFormModal';
 
-type ProfileEntry = {
-  profileId: ServerProfileId;
-  profileName: string;
-  mode: string;
+type AccountEntry = {
   username: string;
   unified: PresetOtomatisasi[];
   legacy: PresetAutomasi[];
   unifiedLogs: LogEksekusi[];
   legacyLogs: LogEksekusiLegacy[];
   error?: string;
+};
+
+type ProfileEntry = {
+  profileId: ServerProfileId;
+  profileName: string;
+  mode: string;
+  accounts: AccountEntry[];
 };
 
 function toMinutes(hhmm: string): number {
@@ -153,6 +157,7 @@ export default function ServerHubPresetManager({ accountKey }: { accountKey: str
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [activeProfile, setActiveProfile] = useState<ServerProfileId>('jatim');
+  const [activeAccountByProfile, setActiveAccountByProfile] = useState<Record<string, string>>({});
 
   const [unifiedEdit, setUnifiedEdit] = useState<UnifiedEditState>(null);
   const [legacyEdit, setLegacyEdit] = useState<LegacyEditState>(null);
@@ -172,30 +177,39 @@ export default function ServerHubPresetManager({ accountKey }: { accountKey: str
       const todayLegacy = getTodayWIBAutomasi();
       const rows = await Promise.all(SERVER_PROFILES.map(async (p) => {
         const profileId = p.id as ServerProfileId;
-        const cred = await loadServerCreds(profileId, accountKey).catch(() => null);
-        const username = (cred?.nip || '').trim();
-        const base: ProfileEntry = {
-          profileId, profileName: p.nama, mode: p.mode, username,
-          unified: [], legacy: [], unifiedLogs: [], legacyLogs: [],
-        };
-        if (!username) return { ...base, error: 'Kredensial server belum tersimpan.' };
-        try {
-          const [u, ul] = await Promise.all([
-            bacaSemuaPreset(username, profileId).catch(() => [] as PresetOtomatisasi[]),
-            bacaLogHarian(username, today, profileId).catch(() => [] as LogEksekusi[]),
-          ]);
-          let legacy: PresetAutomasi[] = [];
-          let legacyLogs: LogEksekusiLegacy[] = [];
-          if (p.mode === 'ponorogo-absensi') {
-            legacy = await bacaSemuaPresetLegacy(username).catch(() => [] as PresetAutomasi[]);
-            legacyLogs = await bacaLogHarianLegacy(username, todayLegacy).catch(() => [] as LogEksekusiLegacy[]);
+        const creds = await loadAllServerCreds(profileId, accountKey).catch(() => [] as any[]);
+        const accounts: AccountEntry[] = await Promise.all((creds as any[]).map(async (cred: any) => {
+          const username = String(cred?.nip || '').trim();
+          if (!username) return { username: '', unified: [], legacy: [], unifiedLogs: [], legacyLogs: [], error: 'Kredensial tidak valid.' } as AccountEntry;
+          try {
+            const [u, ul] = await Promise.all([
+              bacaSemuaPreset(username, profileId).catch(() => [] as PresetOtomatisasi[]),
+              bacaLogHarian(username, today, profileId).catch(() => [] as LogEksekusi[]),
+            ]);
+            let legacy: PresetAutomasi[] = [];
+            let legacyLogs: LogEksekusiLegacy[] = [];
+            if (p.mode === 'ponorogo-absensi') {
+              legacy = await bacaSemuaPresetLegacy(username).catch(() => [] as PresetAutomasi[]);
+              legacyLogs = await bacaLogHarianLegacy(username, todayLegacy).catch(() => [] as LogEksekusiLegacy[]);
+            }
+            return { username, unified: u, unifiedLogs: ul, legacy, legacyLogs } as AccountEntry;
+          } catch (e: any) {
+            return { username, unified: [], legacy: [], unifiedLogs: [], legacyLogs: [], error: e?.message || 'Gagal memuat preset.' } as AccountEntry;
           }
-          return { ...base, username, unified: u, unifiedLogs: ul, legacy, legacyLogs };
-        } catch (e: any) {
-          return { ...base, error: e?.message || 'Gagal memuat preset.' };
-        }
+        }));
+        return { profileId, profileName: p.nama, mode: p.mode, accounts: accounts.filter(a => a.username) } as ProfileEntry;
       }));
       setEntries(rows);
+      setActiveAccountByProfile(prev => {
+        const next = { ...prev };
+        for (const row of rows) {
+          const current = next[row.profileId];
+          if (!row.accounts.some(a => a.username === current)) {
+            next[row.profileId] = row.accounts[0]?.username || '';
+          }
+        }
+        return next;
+      });
     } finally {
       setLoading(false);
     }
@@ -311,7 +325,9 @@ export default function ServerHubPresetManager({ accountKey }: { accountKey: str
 
   const now = useMemo(() => new Date(nowTick), [nowTick]);
   const unifiedEditProfile = unifiedEdit ? getServerProfile(unifiedEdit.profileId) : null;
-  const selectedEntry = entries.find(e => e.profileId === activeProfile) || null;
+  const selectedProfileEntry = entries.find(e => e.profileId === activeProfile) || null;
+  const selectedUsername = (selectedProfileEntry && (activeAccountByProfile[selectedProfileEntry.profileId] || selectedProfileEntry.accounts[0]?.username)) || '';
+  const selectedAccount = selectedProfileEntry?.accounts.find(a => a.username === selectedUsername) || selectedProfileEntry?.accounts[0] || null;
 
   return (
     <div className="space-y-3">
@@ -369,7 +385,8 @@ export default function ServerHubPresetManager({ accountKey }: { accountKey: str
           <div className="grid grid-cols-3 gap-1.5">
             {SERVER_PROFILES.map((p) => {
               const e = entries.find(x => x.profileId === p.id);
-              const total = (e?.unified.length || 0) + (e?.legacy.length || 0);
+              const total = (e?.accounts || []).reduce((sum, a) => sum + a.unified.length + a.legacy.length, 0);
+              const accCount = e?.accounts.length || 0;
               const active = activeProfile === p.id;
               return (
                 <button
@@ -379,8 +396,9 @@ export default function ServerHubPresetManager({ accountKey }: { accountKey: str
                   className={`relative rounded-xl px-2.5 sm:px-3 py-2 text-left transition-all border ${active ? 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-sm' : 'border-transparent hover:bg-white/70 dark:hover:bg-slate-900/50 text-slate-600 dark:text-slate-300'}`}
                 >
                   <div className={`text-xs sm:text-[13px] font-bold truncate ${active ? 'text-slate-900 dark:text-slate-100' : 'text-slate-700 dark:text-slate-200'}`}>{p.nama}</div>
-                  <div className="mt-0.5 flex items-center gap-1.5">
-                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${active ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>{total} preset</span>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${active ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>{accCount} akun</span>
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${active ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300' : 'bg-slate-100/70 dark:bg-slate-800/70 text-slate-500 dark:text-slate-400'}`}>{total} preset</span>
                   </div>
                 </button>
               );
@@ -393,28 +411,52 @@ export default function ServerHubPresetManager({ accountKey }: { accountKey: str
             <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30 p-6 text-center text-sm text-slate-500 dark:text-slate-400 flex items-center justify-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" /> Memuat preset...
             </div>
-          ) : !selectedEntry ? null : (
+          ) : !selectedProfileEntry ? null : selectedProfileEntry.accounts.length === 0 ? (
+            <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 px-3 py-3 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>Belum ada akun/kredensial tersimpan untuk {selectedProfileEntry.profileName}. Tambahkan melalui login Server di profil ini (simpan & masuk) agar preset per akun dapat dikelola dan disinkronkan ke native.</span>
+            </div>
+          ) : !selectedAccount ? null : (
             <div className="space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
-                <div className="min-w-0">
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Akun: {selectedEntry.username ? <span className="font-semibold text-slate-700 dark:text-slate-200">{selectedEntry.username}</span> : <span className="text-amber-600 dark:text-amber-400 font-medium">belum tersimpan</span>}
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2.5">
+                <div className="min-w-0 space-y-1.5">
+                  <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                    <Users className="w-3.5 h-3.5" />
+                    <span>Akun ({selectedProfileEntry.accounts.length}) — preset & lokasi terisolasi per NIP</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {selectedProfileEntry.accounts.map((acc) => {
+                      const active = acc.username === selectedAccount.username;
+                      const total = acc.unified.length + acc.legacy.length;
+                      return (
+                        <button
+                          key={acc.username}
+                          type="button"
+                          onClick={() => setActiveAccountByProfile(prev => ({ ...prev, [selectedProfileEntry.profileId]: acc.username }))}
+                          className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                          title={`Kelola preset untuk ${acc.username}`}
+                        >
+                          <span className="truncate max-w-[140px]">{acc.username}</span>
+                          <span className={`px-1.5 py-0.5 rounded-md text-[10px] ${active ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>{total}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <button
                     type="button"
-                    disabled={!selectedEntry.username}
-                    onClick={() => void openUnifiedModal(selectedEntry.profileId, selectedEntry.username, null)}
+                    disabled={!selectedAccount.username}
+                    onClick={() => void openUnifiedModal(selectedProfileEntry.profileId, selectedAccount.username, null)}
                     className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 transition-colors"
                   >
                     <Plus className="w-3.5 h-3.5" /> Tambah Preset
                   </button>
-                  {selectedEntry.mode === 'ponorogo-absensi' && (
+                  {selectedProfileEntry.mode === 'ponorogo-absensi' && (
                     <button
                       type="button"
-                      disabled={!selectedEntry.username}
-                      onClick={() => void openLegacyModal(selectedEntry.username, null)}
+                      disabled={!selectedAccount.username}
+                      onClick={() => void openLegacyModal(selectedAccount.username, null)}
                       className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 hover:bg-amber-100/70 dark:hover:bg-amber-900/30 disabled:opacity-50 transition-colors"
                     >
                       <Plus className="w-3.5 h-3.5" /> Tambah Legacy
@@ -423,28 +465,28 @@ export default function ServerHubPresetManager({ accountKey }: { accountKey: str
                 </div>
               </div>
 
-              {selectedEntry.error && (
+              {selectedAccount.error && (
                 <div className="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/20 px-3 py-2.5 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-                  <span>{selectedEntry.error}</span>
+                  <span>{selectedAccount.error}</span>
                 </div>
               )}
 
-              {!selectedEntry.error && selectedEntry.unified.length + selectedEntry.legacy.length === 0 && (
+              {!selectedAccount.error && selectedAccount.unified.length + selectedAccount.legacy.length === 0 && (
                 <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/20 px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400">
-                  Belum ada preset untuk {selectedEntry.profileName}.
+                  Belum ada preset untuk akun <span className="font-semibold">{selectedAccount.username}</span>.
                 </div>
               )}
 
               <div className="space-y-2.5">
-                {selectedEntry.unified.map((preset) => {
-                  const log = selectedEntry.unifiedLogs.find(l => l.presetId === preset.id);
+                {selectedAccount.unified.map((preset) => {
+                  const log = selectedAccount.unifiedLogs.find(l => l.presetId === preset.id);
                   const next = nextUnifiedTrigger(preset, now);
                   const done = log?.berhasil;
-                  const kToggle = `u:${selectedEntry.profileId}:${selectedEntry.username}:${preset.id}:toggle`;
-                  const kDel = `u:${selectedEntry.profileId}:${selectedEntry.username}:${preset.id}:del`;
+                  const kToggle = `u:${selectedProfileEntry.profileId}:${selectedAccount.username}:${preset.id}:toggle`;
+                  const kDel = `u:${selectedProfileEntry.profileId}:${selectedAccount.username}:${preset.id}:del`;
                   return (
-                    <div key={`u-${preset.id}`} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/40 p-3 sm:p-3.5 space-y-2.5">
+                    <div key={`u-${selectedAccount.username}-${preset.id}`} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/40 p-3 sm:p-3.5 space-y-2.5">
                       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2.5">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -461,9 +503,9 @@ export default function ServerHubPresetManager({ accountKey }: { accountKey: str
                           </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                          <button type="button" disabled={!!busyKey} onClick={() => void openUnifiedModal(selectedEntry.profileId, selectedEntry.username, preset)} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"><Pencil className="w-3.5 h-3.5" /> Edit</button>
-                          <button type="button" disabled={!!busyKey} onClick={() => void act(kToggle, async () => { await toggleAktifPreset(selectedEntry.username, preset.id, selectedEntry.profileId); try { window.dispatchEvent(new CustomEvent('presensi-automasi-updated')); } catch {} })} className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold border ${preset.aktif ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/40' : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/40'} disabled:opacity-50`}>{busyKey === kToggle ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : preset.aktif ? <PowerOff className="w-3.5 h-3.5" /> : <Power className="w-3.5 h-3.5" />} {preset.aktif ? 'Off' : 'On'}</button>
-                          <button type="button" disabled={!!busyKey} onClick={() => { if (!confirm(`Hapus preset "${preset.nama}"?`)) return; void act(kDel, async () => { await hapusPreset(selectedEntry.username, preset.id, selectedEntry.profileId); try { window.dispatchEvent(new CustomEvent('presensi-automasi-updated')); } catch {} }); }} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-300 disabled:opacity-50">{busyKey === kDel ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} Hapus</button>
+                          <button type="button" disabled={!!busyKey} onClick={() => void openUnifiedModal(selectedProfileEntry.profileId, selectedAccount.username, preset)} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"><Pencil className="w-3.5 h-3.5" /> Edit</button>
+                          <button type="button" disabled={!!busyKey} onClick={() => void act(kToggle, async () => { await toggleAktifPreset(selectedAccount.username, preset.id, selectedProfileEntry.profileId); try { window.dispatchEvent(new CustomEvent('presensi-automasi-updated')); } catch {} })} className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold border ${preset.aktif ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/40' : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/40'} disabled:opacity-50`}>{busyKey === kToggle ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : preset.aktif ? <PowerOff className="w-3.5 h-3.5" /> : <Power className="w-3.5 h-3.5" />} {preset.aktif ? 'Off' : 'On'}</button>
+                          <button type="button" disabled={!!busyKey} onClick={() => { if (!confirm(`Hapus preset "${preset.nama}"?`)) return; void act(kDel, async () => { await hapusPreset(selectedAccount.username, preset.id, selectedProfileEntry.profileId); try { window.dispatchEvent(new CustomEvent('presensi-automasi-updated')); } catch {} }); }} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-300 disabled:opacity-50">{busyKey === kDel ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} Hapus</button>
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5"><CalendarDays className="w-3.5 h-3.5 text-slate-400 shrink-0" /><HariBadges hariAktif={preset.hariAktif as number[]} labelMap={LABEL_HARI as any} /></div>
@@ -476,14 +518,14 @@ export default function ServerHubPresetManager({ accountKey }: { accountKey: str
                   );
                 })}
 
-                {selectedEntry.legacy.map((preset) => {
-                  const log = selectedEntry.legacyLogs.find(l => l.presetId === preset.id);
+                {selectedAccount.legacy.map((preset) => {
+                  const log = selectedAccount.legacyLogs.find(l => l.presetId === preset.id);
                   const next = nextLegacyTrigger(preset, now);
                   const done = log?.berhasil;
-                  const kToggle = `l:${selectedEntry.profileId}:${selectedEntry.username}:${preset.id}:toggle`;
-                  const kDel = `l:${selectedEntry.profileId}:${selectedEntry.username}:${preset.id}:del`;
+                  const kToggle = `l:${selectedProfileEntry.profileId}:${selectedAccount.username}:${preset.id}:toggle`;
+                  const kDel = `l:${selectedProfileEntry.profileId}:${selectedAccount.username}:${preset.id}:del`;
                   return (
-                    <div key={`l-${preset.id}`} className="rounded-xl border border-amber-200/70 dark:border-amber-800/40 bg-amber-50/20 dark:bg-amber-950/5 p-3 sm:p-3.5 space-y-2.5">
+                    <div key={`l-${selectedAccount.username}-${preset.id}`} className="rounded-xl border border-amber-200/70 dark:border-amber-800/40 bg-amber-50/20 dark:bg-amber-950/5 p-3 sm:p-3.5 space-y-2.5">
                       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2.5">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -499,9 +541,9 @@ export default function ServerHubPresetManager({ accountKey }: { accountKey: str
                           </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                          <button type="button" disabled={!!busyKey} onClick={() => void openLegacyModal(selectedEntry.username, preset)} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"><Pencil className="w-3.5 h-3.5" /> Edit</button>
-                          <button type="button" disabled={!!busyKey} onClick={() => void act(kToggle, async () => { await toggleAktifPresetLegacy(selectedEntry.username, preset.id); try { window.dispatchEvent(new CustomEvent('presensi-preset-updated')); } catch {} })} className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold border ${preset.aktif ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/40' : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/40'} disabled:opacity-50`}>{busyKey === kToggle ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : preset.aktif ? <PowerOff className="w-3.5 h-3.5" /> : <Power className="w-3.5 h-3.5" />} {preset.aktif ? 'Off' : 'On'}</button>
-                          <button type="button" disabled={!!busyKey} onClick={() => { if (!confirm(`Hapus preset legacy "${preset.nama}"?`)) return; void act(kDel, async () => { await hapusPresetLegacy(selectedEntry.username, preset.id); try { window.dispatchEvent(new CustomEvent('presensi-preset-updated')); } catch {} }); }} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-300 disabled:opacity-50">{busyKey === kDel ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} Hapus</button>
+                          <button type="button" disabled={!!busyKey} onClick={() => void openLegacyModal(selectedAccount.username, preset)} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"><Pencil className="w-3.5 h-3.5" /> Edit</button>
+                          <button type="button" disabled={!!busyKey} onClick={() => void act(kToggle, async () => { await toggleAktifPresetLegacy(selectedAccount.username, preset.id); try { window.dispatchEvent(new CustomEvent('presensi-preset-updated')); } catch {} })} className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold border ${preset.aktif ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/40' : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/40'} disabled:opacity-50`}>{busyKey === kToggle ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : preset.aktif ? <PowerOff className="w-3.5 h-3.5" /> : <Power className="w-3.5 h-3.5" />} {preset.aktif ? 'Off' : 'On'}</button>
+                          <button type="button" disabled={!!busyKey} onClick={() => { if (!confirm(`Hapus preset legacy "${preset.nama}"?`)) return; void act(kDel, async () => { await hapusPresetLegacy(selectedAccount.username, preset.id); try { window.dispatchEvent(new CustomEvent('presensi-preset-updated')); } catch {} }); }} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-300 disabled:opacity-50">{busyKey === kDel ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} Hapus</button>
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5"><CalendarDays className="w-3.5 h-3.5 text-slate-400 shrink-0" /><HariBadges hariAktif={preset.hariAktif as number[]} labelMap={NAMA_HARI_LEGACY as any} /></div>

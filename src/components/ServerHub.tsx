@@ -9,7 +9,7 @@ import { SERVER_PROFILES, type ServerProfileId } from '../lib/serverProfiles';
 import { loginServerPusat, tandaiAktifServer, imeiStabil, simpanImei } from '../lib/serverAutoLogin';
 import { APP_LOGO } from '../lib/appIdentity';
 import { ambilImei, login as webLogin, logout as webLogout, muatCaptcha, selesaikanCaptcha, setWebPresensiEpBase } from '../lib/webPresensi';
-import { loadServerCreds, saveServerCreds, deleteServerCreds, type SavedServerCreds } from '../lib/loginCredsStore';
+import { loadServerCreds, loadAllServerCreds, saveServerCreds, deleteServerCreds, setActiveServerCred, type SavedServerCreds } from '../lib/loginCredsStore';
 import { loadAppAuthSession } from '../lib/appAuthSession';
 import { isProfileAllowed } from '../lib/appUserManager';
 import AppAccountManagementModal from './AppAccountManagementModal';
@@ -35,6 +35,7 @@ export default function ServerHub({ isDarkMode, toggleDarkMode, onAppLogout }: P
   const [needsCreds, setNeedsCreds] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedMap, setSavedMap] = useState<Record<string, SavedCreds | null>>({});
+  const [savedAccountsMap, setSavedAccountsMap] = useState<Record<string, SavedCreds[]>>({});
   const [showManage, setShowManage] = useState(false);
   const [hubTab, setHubTab] = useState<'server' | 'preset'>('server');
   const [autostartOn, setAutostartOn] = useState(false);
@@ -100,15 +101,33 @@ export default function ServerHub({ isDarkMode, toggleDarkMode, onAppLogout }: P
     captchaBlobRef.current = null;
   }, [captchaUrl]);
 
+  const refreshSavedForProfile = useCallback(async (profileId: ServerProfileId) => {
+    const [active, all] = await Promise.all([
+      loadServerCreds(profileId, accountKey),
+      loadAllServerCreds(profileId, accountKey),
+    ]);
+    setSavedMap(prev => ({ ...prev, [profileId]: active }));
+    setSavedAccountsMap(prev => ({ ...prev, [profileId]: all }));
+    return { active, all };
+  }, [accountKey]);
+
   // Muat indikator kredensial tersimpan (Firestore, per akun app) untuk profil yang terlihat
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const entries = await Promise.all(SERVER_PROFILES.map(async (p) => [p.id, await loadServerCreds(p.id as ServerProfileId, accountKey)] as const));
+      const entries = await Promise.all(SERVER_PROFILES.map(async (p) => {
+        const [active, all] = await Promise.all([
+          loadServerCreds(p.id as ServerProfileId, accountKey),
+          loadAllServerCreds(p.id as ServerProfileId, accountKey),
+        ]);
+        return [p.id, active, all] as const;
+      }));
       if (!cancelled) {
         const next: Record<string, SavedCreds | null> = {};
-        for (const [id, val] of entries) next[id] = val;
+        const nextAll: Record<string, SavedCreds[]> = {};
+        for (const [id, val, all] of entries) { next[id] = val; nextAll[id] = all; }
         setSavedMap(next);
+        setSavedAccountsMap(nextAll);
       }
     })();
     return () => { cancelled = true; };
@@ -123,19 +142,18 @@ export default function ServerHub({ isDarkMode, toggleDarkMode, onAppLogout }: P
     setError(null);
     setNeedsCreds(true);
     (async () => {
-      const saved = savedMap[selected] ?? await loadServerCreds(selected, accountKey);
+      const { active } = await refreshSavedForProfile(selected);
       if (cancelled) return;
-      setSavedMap(prev => ({ ...prev, [selected]: saved }));
-      setNip(saved?.nip || '');
-      setPassword(saved?.password || '');
+      setNip(active?.nip || '');
+      setPassword(active?.password || '');
       // Jika user tidak boleh ubah kredensial dan kredensial lengkap: langsung masuk (tanpa isi form)
-      if (!canEditServerCreds && saved?.nip && saved?.password) {
-        void doLogin(selected, { nip: saved.nip, password: saved.password, imei: saved.imei }, { showErrors: true, connectingUi: true, allowRecovery: true });
+      if (!canEditServerCreds && active?.nip && active?.password) {
+        void doLogin(selected, { nip: active.nip, password: active.password, imei: active.imei }, { showErrors: true, connectingUi: true, allowRecovery: true });
       }
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, accountKey]);
+  }, [selected, accountKey, refreshSavedForProfile]);
 
   const loadCaptcha = useCallback(async (_hint = '') => {
     if (!profile) return;
@@ -208,11 +226,8 @@ export default function ServerHub({ isDarkMode, toggleDarkMode, onAppLogout }: P
         // simpan hanya jika akun ini diizinkan mengubah kredensialnya sendiri (atau admin)
         if (canEditServerCreds) {
           await saveServerCreds(pId, toSave, accountKey);
-          setSavedMap(prev => ({ ...prev, [pId]: toSave }));
-        } else {
-          // tetap sinkronkan state lokal tampilan
-          setSavedMap(prev => ({ ...prev, [pId]: toSave }));
         }
+        await refreshSavedForProfile(pId);
         loginAs(hasil.profile as any, pId as ServerProfileId, creds.nip.trim());
         return true;
       }
@@ -260,19 +275,18 @@ export default function ServerHub({ isDarkMode, toggleDarkMode, onAppLogout }: P
       if (!visibleProfiles.some(p => p.id === profileId)) return;
       setError(null);
       setHubTab('server');
-      const saved = savedMap[profileId] ?? await loadServerCreds(profileId, accountKey);
-      setSavedMap(prev => ({ ...prev, [profileId]: saved }));
+      const { active } = await refreshSavedForProfile(profileId);
       setSelected(profileId);
-      if (autoLogin && saved?.nip && saved?.password) {
+      if (autoLogin && active?.nip && active?.password) {
         setNeedsCreds(true);
-        void doLogin(profileId, { nip: saved.nip, password: saved.password, imei: saved.imei }, { showErrors: true, connectingUi: true, allowRecovery: true });
+        void doLogin(profileId, { nip: active.nip, password: active.password, imei: active.imei }, { showErrors: true, connectingUi: true, allowRecovery: true });
       } else {
         setNeedsCreds(true);
       }
     };
     window.addEventListener('tetuko-tray-open-profile', handler as any);
     return () => window.removeEventListener('tetuko-tray-open-profile', handler as any);
-  }, [accountKey, doLogin, savedMap, visibleProfiles]);
+  }, [accountKey, doLogin, refreshSavedForProfile, visibleProfiles]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -320,6 +334,7 @@ export default function ServerHub({ isDarkMode, toggleDarkMode, onAppLogout }: P
   };
 
   const selectedSaved = selected ? (savedMap[selected] ?? null) : null;
+  const selectedSavedAccounts = selected ? (savedAccountsMap[selected] ?? []) : [];
 
   return (
     <div className="fixed inset-0 overflow-auto bg-slate-200 dark:bg-[#0a0f1c] p-4 sm:p-8">
@@ -487,6 +502,46 @@ export default function ServerHub({ isDarkMode, toggleDarkMode, onAppLogout }: P
                 )}
 
                 <form onSubmit={submit} className="space-y-4">
+                  {selectedSavedAccounts.length > 0 && (
+                    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50 p-2.5 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Akun tersimpan ({selectedSavedAccounts.length})</div>
+                        {canEditServerCreds && (
+                          <button
+                            type="button"
+                            onClick={() => { setNip(''); setPassword(''); setRecoveredImei(null); setError(null); setRecoveryOpen(false); }}
+                            className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+                          >
+                            Tambah akun
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {selectedSavedAccounts.map((acc) => {
+                          const active = acc.nip.trim().toLowerCase() === (nip || selectedSaved?.nip || '').trim().toLowerCase();
+                          return (
+                            <button
+                              key={acc.nip}
+                              type="button"
+                              onClick={async () => {
+                                setNip(acc.nip || '');
+                                setPassword(acc.password || '');
+                                setError(null);
+                                if (selected) {
+                                  try { await setActiveServerCred(selected, acc.nip, accountKey); } catch {}
+                                  await refreshSavedForProfile(selected);
+                                }
+                              }}
+                              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${active ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                              title={`Gunakan akun ${acc.nip}`}
+                            >
+                              <span className="truncate max-w-[160px]">{acc.nip}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="sm:col-span-1">
                       <label className="mb-1.5 block text-xs font-semibold text-slate-600 dark:text-slate-300">NIP / Username</label>
@@ -539,13 +594,18 @@ export default function ServerHub({ isDarkMode, toggleDarkMode, onAppLogout }: P
                             type="button"
                             onClick={async () => {
                               if (!selected) return;
-                              await deleteServerCreds(selected, accountKey);
-                              setSavedMap(prev => ({ ...prev, [selected]: null }));
-                              setNip(''); setPassword(''); setError(null); setNeedsCreds(true); resetRecovery();
+                              const targetNip = (nip || selectedSaved.nip || '').trim();
+                              await deleteServerCreds(selected, accountKey, targetNip || undefined);
+                              await refreshSavedForProfile(selected);
+                              const next = (savedAccountsMap[selected] || []).filter(a => a.nip.trim().toLowerCase() !== targetNip.toLowerCase());
+                              const active = next[0] || null;
+                              setNip(active?.nip || '');
+                              setPassword(active?.password || '');
+                              setError(null); setNeedsCreds(true); resetRecovery();
                             }}
                             className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
                           >
-                            Hapus Kredensial
+                            Hapus Akun Ini
                           </button>
                         )}
                         {profile?.mode === 'bkd-rpc' && (
