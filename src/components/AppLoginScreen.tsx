@@ -4,6 +4,8 @@ import { verifyAdminCredentials, verifyAppUserPassword, sanitizeStr, DEFAULT_ADM
 import type { AppUserSafe, AppUserPermissions } from '../lib/appUserManager';
 import { createAdminAppUser, saveAppAuthSession } from '../lib/appAuthSession';
 import { APP_LOGO } from '../lib/appIdentity';
+import { isTauriRuntime } from '../lib/nativeAutomation';
+import { loadRememberedAppLogin, saveRememberedAppLogin, clearRememberedAppLogin, hasRememberedAppLogin } from '../lib/rememberAppLogin';
 
 interface Props {
   onLogin: () => void;
@@ -48,7 +50,18 @@ export default function AppLoginScreen({ onLogin, isDarkMode, toggleDarkMode }: 
   const [state, dispatch] = useReducer(authReducer, { status: 'IDLE', username: '', pin: '', attempts: 0, cooldownUntil: null, errorMessage: null });
   const [showPin, setShowPin] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
+  const [rememberMe, setRememberMe] = useState(() => isTauriRuntime() && hasRememberedAppLogin());
   const authInFlight = useRef(false);
+
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    const remembered = loadRememberedAppLogin();
+    if (remembered) {
+      dispatch({ type: 'SET_USERNAME', payload: remembered.username });
+      dispatch({ type: 'SET_PIN', payload: remembered.password });
+      setRememberMe(true);
+    }
+  }, []);
 
   useEffect(() => {
     try {
@@ -117,6 +130,13 @@ export default function AppLoginScreen({ onLogin, isDarkMode, toggleDarkMode }: 
 
       if (authenticated && loginUser) {
         try { localStorage.setItem(LS_ATTEMPTS, '0'); localStorage.removeItem(LS_COOLDOWN); } catch {}
+        if (isTauriRuntime()) {
+          if (rememberMe) {
+            saveRememberedAppLogin({ username: uname, password: pass });
+          } else {
+            clearRememberedAppLogin();
+          }
+        }
         saveAppAuthSession({ user: loginUser, role: loginUser.role, permissions: loginPerms });
         dispatch({ type: 'AUTH_SUCCESS' });
         setTimeout(() => onLogin(), 700);
@@ -210,6 +230,19 @@ export default function AppLoginScreen({ onLogin, isDarkMode, toggleDarkMode }: 
                 </div>
               </div>
             </div>
+
+            {isTauriRuntime() && (
+              <label className="flex items-center gap-2.5 select-none cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  disabled={isLocked || isAuthing}
+                  className="h-4 w-4 rounded border-slate-300 dark:border-slate-600 text-indigo-600 focus:ring-indigo-500/30 focus:ring-2 cursor-pointer disabled:opacity-50"
+                />
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-400 group-hover:text-slate-800 dark:group-hover:text-slate-200 transition-colors">Ingat login di perangkat ini</span>
+              </label>
+            )}
 
             <button type="submit" disabled={!canSubmit} className={`w-full flex justify-center items-center gap-2 py-3.5 px-6 rounded-xl text-sm font-bold text-white transition-colors ${isAuthing ? 'bg-indigo-500 cursor-wait' : isLocked || !canSubmit ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
               {isAuthing ? (<><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /><span>Memverifikasi...</span></>) : isLocked ? (<><Lock className="w-5 h-5" /><span>Akses Tertutup</span></>) : (<><span>Masuk ke Sistem</span><LogIn className="w-5 h-5" /></>)}
