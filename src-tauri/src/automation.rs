@@ -247,6 +247,19 @@ fn in_range(start: NaiveTime, end: NaiveTime, now: NaiveTime) -> bool {
     }
 }
 
+fn time_in_range_str(chosen: &str, start: &str, end: &str) -> bool {
+    let Some(c) = parse_hhmm(chosen) else {
+        return false;
+    };
+    let Some(s) = parse_hhmm(start) else {
+        return false;
+    };
+    let Some(e) = parse_hhmm(end) else {
+        return false;
+    };
+    in_range(s, e, c)
+}
+
 fn random_time_in_range(start: &str, end: &str) -> Option<String> {
     let s = parse_hhmm(start)?;
     let e = parse_hhmm(end)?;
@@ -470,11 +483,20 @@ async fn submit_bkd(
     let log_key = format!("{}::{}::{}", profile_key, username, tanggal);
     let rand_key = format!("{}::{}::{}::{}", profile_key, username, preset.id, tanggal);
 
-    // choose random trigger time within window
+    // choose random trigger time within window (reset jika di luar rentang preset saat ini, mis. preset diubah)
     {
         let mut need_save = false;
         {
             let mut st = mgr.state.write().await;
+            let invalid = st
+                .runtime
+                .random_times
+                .get(&rand_key)
+                .map(|t| !time_in_range_str(t, &preset.jam_mulai, &preset.jam_selesai))
+                .unwrap_or(false);
+            if invalid {
+                st.runtime.random_times.remove(&rand_key);
+            }
             if !st.runtime.random_times.contains_key(&rand_key) {
                 if let Some(t) = random_time_in_range(&preset.jam_mulai, &preset.jam_selesai) {
                     st.runtime.random_times.insert(rand_key.clone(), t);
@@ -732,6 +754,15 @@ async fn submit_ponorogo_unified(
         let mut need_save = false;
         {
             let mut st = mgr.state.write().await;
+            let invalid = st
+                .runtime
+                .random_times
+                .get(&rand_key)
+                .map(|t| !time_in_range_str(t, &preset.jam_mulai, &preset.jam_selesai))
+                .unwrap_or(false);
+            if invalid {
+                st.runtime.random_times.remove(&rand_key);
+            }
             if !st.runtime.random_times.contains_key(&rand_key) {
                 if let Some(t) = random_time_in_range(&preset.jam_mulai, &preset.jam_selesai) {
                     st.runtime.random_times.insert(rand_key.clone(), t);
