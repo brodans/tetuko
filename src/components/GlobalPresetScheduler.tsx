@@ -18,10 +18,12 @@ import {
 import { bacaStorage, tulisStorage } from '../lib/storageAman';
 import { isTauriRuntime, syncNativeAutomation, setNativeScheduler } from '../lib/nativeAutomation';
 import { bacaTitik } from '../lib/lokasiTersimpan';
-import { getServerProfile } from '../lib/serverProfiles';
+import { getServerProfile, SERVER_PROFILES } from '../lib/serverProfiles';
 import { bacaSemuaPreset as bacaSemuaPresetLegacy, bacaSemuaStockFoto as bacaSemuaStockFotoLegacy } from '../lib/presetAutomasi';
 import { AUTOMATION_AVAILABLE } from '../lib/deployMode';
 import { kirimNotifikasiNative } from '../lib/notifikasi';
+import { loadAppAuthSession } from '../lib/appAuthSession';
+import { loadAllServerCreds } from '../lib/loginCredsStore';
 
 const KUNCI_STORAGE_PENJADWAL = 'presensi_penjadwal_otomatis_aktif';
 
@@ -148,88 +150,136 @@ function GlobalPresetSchedulerInner() {
     void setNativeScheduler(serverProfileId, penjadwalAktif);
   }, [tauri, serverProfileId, penjadwalAktif]);
 
-  useEffect(() => {
-    if (!tauri || !username) return;
+  const syncAllToNative = useCallback(async () => {
+    if (!isTauriRuntime()) return;
+    try {
+      const appSession = loadAppAuthSession();
+      const accountKey = (appSession?.user?.username || (appSession?.role === 'admin' ? 'admin' : 'user')).toLowerCase();
+      const allUnifiedStock = await bacaSemuaStockFoto().catch(() => [] as any[]);
+      const legacyStockAll = await bacaSemuaStockFotoLegacy().catch(() => [] as any[]);
 
-    let cancelled = false;
-    (async () => {
-      try {
-        const allUnifiedStock = await bacaSemuaStockFoto().catch(() => [] as any[]);
-        const buildUnifiedStock = (presetList: PresetOtomatisasi[]) => {
-          const ids = new Set<string>();
-          for (const p of presetList) for (const id of (p.stockFotoIds || [])) ids.add(String(id));
-          if (ids.size === 0) return [];
-          return (allUnifiedStock as any[])
-            .filter((f: any) => ids.has(String(f.id)))
-            .map((f: any) => ({ id: String(f.id), nama: String(f.nama || ''), dataUrl: String(f.dataUrl || '') }));
-        };
+      const buildUnifiedStock = (presetList: PresetOtomatisasi[]) => {
+        const ids = new Set<string>();
+        for (const p of presetList) for (const id of (p.stockFotoIds || [])) ids.add(String(id));
+        if (ids.size === 0) return [];
+        return (allUnifiedStock as any[])
+          .filter((f: any) => ids.has(String(f.id)))
+          .map((f: any) => ({ id: String(f.id), nama: String(f.nama || ''), dataUrl: String(f.dataUrl || '') }));
+      };
 
-        // Sinkronkan hanya profil aktif (konteks akun & sesi presensi yang sedang digunakan)
-        const profile = getServerProfile(serverProfileId);
-        const locations = await bacaTitik(username).catch(() => []);
-        const pAny = (pegawai as any) || {};
-        const bkdCtx = {
-          api_key: String(pAny.apiKey || pAny.api_key || ''),
-          imei: String(pAny.imei || pAny.deviceId || ''),
-          last_latlong: String(pAny.lastLatLong || pAny.last_latlong || (pAny.latitude && pAny.longitude ? `${pAny.latitude},${pAny.longitude}` : '') || ''),
-          nip: String(pAny.nip || username),
-        };
-        const ponorogoCtx = profile.mode === 'ponorogo-absensi'
-          ? {
-              config: {
-                idPegawai: String(pAny.id || pAny.idPegawai || pAny.pegawai_id || ''),
-                deviceId: String(pAny.imei || pAny.deviceId || pAny.device_id || pAny.emei || ''),
-                latitude: String(pAny.latitude || ''),
-                longitude: String(pAny.longitude || ''),
-                idLokasi: String(pAny.idLokasi || pAny.id_lokasi || ''),
-                kodeInstansi: String(pAny.kodeInstansi || pAny.kode_instansi || ''),
-                kodeUnor: String(pAny.kodeUnor || pAny.kode_unor || pAny.unor || ''),
-                workMode: String(pAny.workMode || pAny.work_mode || '1'),
-                versi: String(pAny.versi || '2.0.0'),
-              },
-              pegawai: pAny,
-            }
-          : undefined;
+      const profilesPayload: Record<string, any> = {};
+      const activePegawaiAny = (pegawai as any) || {};
 
-        let legacyPresets: any[] = [];
-        let legacyStock: any[] = [];
-        if (profile.mode === 'ponorogo-absensi') {
-          try { legacyPresets = await bacaSemuaPresetLegacy(username); } catch { legacyPresets = []; }
-          try {
-            const ls = await bacaSemuaStockFotoLegacy();
-            legacyStock = (ls as any[]).map(f => ({ id: String(f.id), nama: String(f.nama || ''), dataUrl: String(f.dataUrl || '') }));
-          } catch { legacyStock = []; }
+      for (const sp of SERVER_PROFILES) {
+        const pid = sp.id;
+        const profileMeta = getServerProfile(pid as any);
+        const creds = await loadAllServerCreds(pid as any, accountKey).catch(() => [] as any[]);
+        for (const cred of creds) {
+          const uname = String(cred?.nip || '').trim();
+          if (!uname) continue;
+          const key = `${pid}::${uname}`;
+          const unified = await bacaSemuaPreset(uname, pid).catch(() => [] as PresetOtomatisasi[]);
+          const locations = await bacaTitik(uname).catch(() => []);
+          let legacy: any[] = [];
+          if (profileMeta.mode === 'ponorogo-absensi') {
+            legacy = await bacaSemuaPresetLegacy(uname).catch(() => []);
+          }
+          const isActiveCtx = !!username && uname === username && pid === serverProfileId;
+          const bkdCtx = isActiveCtx ? {
+            api_key: String(activePegawaiAny.apiKey || activePegawaiAny.api_key || ''),
+            imei: String(activePegawaiAny.imei || cred?.imei || activePegawaiAny.deviceId || ''),
+            last_latlong: String(activePegawaiAny.lastLatLong || activePegawaiAny.last_latlong || (activePegawaiAny.latitude && activePegawaiAny.longitude ? `${activePegawaiAny.latitude},${activePegawaiAny.longitude}` : '') || ''),
+            nip: String(activePegawaiAny.nip || uname),
+          } : {
+            api_key: String(activePegawaiAny.apiKey && (activePegawaiAny.nip === uname || !activePegawaiAny.nip) && pid === serverProfileId ? activePegawaiAny.apiKey : ''),
+            imei: String(cred?.imei || ''),
+            last_latlong: '',
+            nip: uname,
+          };
+          const ponorogoCtx = profileMeta.mode === 'ponorogo-absensi'
+            ? (isActiveCtx ? {
+                config: {
+                  idPegawai: String(activePegawaiAny.id || activePegawaiAny.idPegawai || activePegawaiAny.pegawai_id || ''),
+                  deviceId: String(activePegawaiAny.imei || cred?.imei || activePegawaiAny.deviceId || activePegawaiAny.device_id || activePegawaiAny.emei || ''),
+                  latitude: String(activePegawaiAny.latitude || ''),
+                  longitude: String(activePegawaiAny.longitude || ''),
+                  idLokasi: String(activePegawaiAny.idLokasi || activePegawaiAny.id_lokasi || ''),
+                  kodeInstansi: String(activePegawaiAny.kodeInstansi || activePegawaiAny.kode_instansi || ''),
+                  kodeUnor: String(activePegawaiAny.kodeUnor || activePegawaiAny.kode_unor || activePegawaiAny.unor || ''),
+                  workMode: String(activePegawaiAny.workMode || activePegawaiAny.work_mode || '1'),
+                  versi: String(activePegawaiAny.versi || '2.0.0'),
+                },
+                pegawai: activePegawaiAny,
+              } : {
+                config: { deviceId: String(cred?.imei || ''), workMode: '1', versi: '2.0.0' },
+                pegawai: { nip: uname, imei: String(cred?.imei || ''), deviceId: String(cred?.imei || '') },
+              })
+            : undefined;
+
+          profilesPayload[key] = {
+            profile_id: pid,
+            mode: profileMeta.mode,
+            gateway_url: profileMeta.gatewayUrl,
+            ep_base_url: profileMeta.epBaseUrl,
+            ponorogo_api_base: (profileMeta as any).ponorogoApiBase || '',
+            scheduler_enabled: penjadwalAktif,
+            username: uname,
+            bkd: bkdCtx,
+            ponorogo: ponorogoCtx,
+            unified_presets: unified,
+            locations: (locations as any[]).map((l: any) => ({
+              id: String(l.id), nama: String(l.nama || ''), latitude: Number(l.latitude), longitude: Number(l.longitude),
+            })),
+            stock_photos: profileMeta.mode === 'ponorogo-absensi'
+              ? (legacyStockAll as any[]).map((f: any) => ({ id: String(f.id), nama: String(f.nama || ''), dataUrl: String(f.dataUrl || '') }))
+              : buildUnifiedStock(unified),
+            legacy_ponorogo_presets: legacy,
+          };
         }
+      }
 
-        const profilePayload = {
+      // keep active context as primary key too for compatibility
+      if (username) {
+        const profileMeta = getServerProfile(serverProfileId as any);
+        profilesPayload[serverProfileId] = {
+          ...(profilesPayload[`${serverProfileId}::${username}`] || {}),
           profile_id: serverProfileId,
-          mode: profile.mode,
-          gateway_url: profile.gatewayUrl,
-          ep_base_url: profile.epBaseUrl,
-          ponorogo_api_base: (profile as any).ponorogoApiBase || '',
+          mode: profileMeta.mode,
+          gateway_url: profileMeta.gatewayUrl,
+          ep_base_url: profileMeta.epBaseUrl,
+          ponorogo_api_base: (profileMeta as any).ponorogoApiBase || '',
           scheduler_enabled: penjadwalAktif,
           username,
-          bkd: bkdCtx,
-          ponorogo: ponorogoCtx,
-          unified_presets: presets,
-          locations: (locations as any[]).map((l: any) => ({
-            id: String(l.id), nama: String(l.nama || ''), latitude: Number(l.latitude), longitude: Number(l.longitude),
-          })),
-          stock_photos: profile.mode === 'ponorogo-absensi' && legacyStock.length > 0 ? legacyStock : buildUnifiedStock(presets),
-          legacy_ponorogo_presets: legacyPresets,
         };
-
-        if (!cancelled) {
-          await syncNativeAutomation({ profiles: { [serverProfileId]: profilePayload } } as any);
-          await setNativeScheduler(serverProfileId, penjadwalAktif);
-        }
-      } catch (e) {
-        console.warn('[GlobalPresetScheduler] native sync gagal', e);
       }
-    })();
 
-    return () => { cancelled = true; };
-  }, [tauri, username, serverProfileId, penjadwalAktif, pegawai, presets]);
+      if (Object.keys(profilesPayload).length > 0) {
+        await syncNativeAutomation({ profiles: profilesPayload } as any);
+        await setNativeScheduler(serverProfileId, penjadwalAktif);
+      }
+    } catch (e) {
+      console.warn('[GlobalPresetScheduler] native sync gagal', e);
+    }
+  }, [username, serverProfileId, penjadwalAktif, pegawai]);
+
+  useEffect(() => {
+    if (!tauri) return;
+    let cancelled = false;
+    void syncAllToNative();
+    // sinkronisasi berkala agar perubahan lokal/konfigurasi tersalin ke native state (mandiri di background)
+    const iv = setInterval(() => { if (!cancelled) void syncAllToNative(); }, 60000);
+    const onUpd = () => { if (!cancelled) void syncAllToNative(); };
+    window.addEventListener('presensi-automasi-updated', onUpd);
+    window.addEventListener('presensi-preset-updated', onUpd);
+    window.addEventListener('storage', onUpd);
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
+      window.removeEventListener('presensi-automasi-updated', onUpd);
+      window.removeEventListener('presensi-preset-updated', onUpd);
+      window.removeEventListener('storage', onUpd);
+    };
+  }, [tauri, syncAllToNative, presets]);
 
   // Backend eksekusi automasi preset berjalan di Rust native (Tauri). Komponen ini hanya sinkronisasi UI/state.
   void ready; // menjaga dependency semantik konteks

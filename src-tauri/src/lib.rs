@@ -1165,10 +1165,10 @@ fn build_tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         true,
         None::<&str>,
     )?;
-    let presensi_harian_ponorogo = MenuItem::with_id(
+    let produktifitas_harian_ponorogo = MenuItem::with_id(
         app,
-        "nav:ponorogo:presensi-harian",
-        "Presensi Harian Ponorogo",
+        "nav:ponorogo:produktifitas-harian",
+        "Produktivitas Ponorogo",
         true,
         None::<&str>,
     )?;
@@ -1187,7 +1187,7 @@ fn build_tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
             &absen_jatim,
             &absen_madiun,
             &absen_ponorogo,
-            &presensi_harian_ponorogo,
+            &produktifitas_harian_ponorogo,
             &database_ponorogo,
         ],
     )?;
@@ -1254,8 +1254,8 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
                 "nav:absen:jatim" => emit_tray_navigate(app, "absen:jatim"),
                 "nav:absen:madiun" => emit_tray_navigate(app, "absen:madiun"),
                 "nav:absen:ponorogo" => emit_tray_navigate(app, "absen:ponorogo"),
-                "nav:ponorogo:presensi-harian" => {
-                    emit_tray_navigate(app, "ponorogo:presensi-harian")
+                "nav:ponorogo:produktifitas-harian" => {
+                    emit_tray_navigate(app, "ponorogo:produktifitas-harian")
                 }
                 "nav:ponorogo:database" => emit_tray_navigate(app, "ponorogo:database"),
                 _ => {}

@@ -38,7 +38,7 @@ function trayTargetToProfile(target: TrayNavigateTarget): ServerProfileId {
 function trayTargetToPageId(target: TrayNavigateTarget, profileId: ServerProfileId): string {
   if (profileId === 'ponorogo') {
     if (target === 'ponorogo:database') return 'tabDatabase';
-    if (target === 'ponorogo:presensi-harian') return 'tabLog';
+    if (target === 'ponorogo:produktifitas-harian') return 'tabInputAktivitas';
     return 'tabAbsen';
   }
   return 'tabPresensi';

@@ -5,7 +5,7 @@ export type TrayNavigateTarget =
   | 'absen:jatim'
   | 'absen:madiun'
   | 'absen:ponorogo'
-  | 'ponorogo:presensi-harian'
+  | 'ponorogo:produktifitas-harian'
   | 'ponorogo:database';
 
 export async function getAutostartEnabled(): Promise<boolean> {

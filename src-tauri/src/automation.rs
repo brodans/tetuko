@@ -534,6 +534,12 @@ async fn submit_bkd(
             );
         }
         mgr.save().await;
+        send_notification(
+            app,
+            "ℹ️ Presensi Otomatis Dilewati",
+            &format!("{} — {}", preset.nama, msg),
+        )
+        .await;
         return (true, msg, None);
     }
 
@@ -678,7 +684,18 @@ async fn submit_bkd(
     send_notification(app, title, &format!("{} — {}", preset.nama, msg)).await;
     let _ = app.emit(
         "tetuko://automation-executed",
-        json!({"profile": profile_key, "presetId": preset.id, "ok": ok, "message": msg}),
+        json!({
+            "profile_id": profile_key.split("::").next().unwrap_or(profile_key),
+            "profile_key": profile_key,
+            "username": username,
+            "preset_id": preset.id,
+            "presetId": preset.id,
+            "tanggal": date.format("%Y-%m-%d").to_string(),
+            "ok": ok,
+            "message": msg,
+            "lokasi_dipilih": if lokasi_id.is_empty() { Value::Null } else { Value::String(lokasi_id.clone()) },
+            "eksekusi_pada": Utc::now().timestamp_millis()
+        }),
     );
     (
         ok,
@@ -945,6 +962,7 @@ async fn submit_ponorogo_unified(
         Err(e) => (false, format!("Gagal menghubungi server Ponorogo: {}", e)),
     };
 
+    let tanggal_for_event = date.format("%Y-%m-%d").to_string();
     {
         let mut st = mgr.state.write().await;
         let day = st.runtime.execution_log.entry(log_key).or_default();
@@ -952,12 +970,12 @@ async fn submit_ponorogo_unified(
             preset.id.clone(),
             ExecutionLogEntry {
                 preset_id: preset.id.clone(),
-                tanggal,
+                tanggal: tanggal.clone(),
                 berhasil: ok,
                 pesan: Some(msg.clone()),
                 eksekusi_pada: Utc::now().timestamp_millis(),
                 lokasi_dipilih: None,
-                foto_dipilih: Some(foto_id),
+                foto_dipilih: Some(foto_id.clone()),
             },
         );
     }
@@ -970,7 +988,18 @@ async fn submit_ponorogo_unified(
     send_notification(app, title, &format!("{} — {}", preset.nama, msg)).await;
     let _ = app.emit(
         "tetuko://automation-executed",
-        json!({"profile": profile_key, "presetId": preset.id, "ok": ok, "message": msg}),
+        json!({
+            "profile_id": profile_key.split("::").next().unwrap_or(profile_key),
+            "profile_key": profile_key,
+            "username": profile.username,
+            "preset_id": preset.id,
+            "presetId": preset.id,
+            "tanggal": tanggal_for_event,
+            "ok": ok,
+            "message": msg,
+            "foto_dipilih": foto_id,
+            "eksekusi_pada": Utc::now().timestamp_millis()
+        }),
     );
     (ok, msg)
 }
@@ -1101,13 +1130,25 @@ pub async fn automation_set_scheduler(
 ) -> Result<bool, String> {
     {
         let mut st = state.state.write().await;
+        let mut touched = false;
+        // exact key
         if let Some(p) = st.profiles.get_mut(&profile_id) {
             p.scheduler_enabled = enabled;
-        } else {
+            touched = true;
+        }
+        // also apply to composite keys (profileId::username) for multi-account
+        let prefix = format!("{}::", profile_id);
+        for (k, p) in st.profiles.iter_mut() {
+            if k.starts_with(&prefix) {
+                p.scheduler_enabled = enabled;
+                touched = true;
+            }
+        }
+        if !touched {
             st.profiles.insert(
                 profile_id.clone(),
                 ProfileAutomation {
-                    profile_id,
+                    profile_id: profile_id.clone(),
                     scheduler_enabled: enabled,
                     ..Default::default()
                 },
