@@ -851,13 +851,7 @@ async fn absensi_log_proxy_handler(
     (status, Json(v)).into_response()
 }
 
-async fn start_local_server() {
-    let client = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .expect("reqwest client");
-
-    let state = Arc::new(AppState { client });
+fn build_router(state: Arc<AppState>) -> Router {
     // Proxy lokal dipakai dari webview Tauri/dev dengan credentials (cookie sesi /ep).
     // Jangan gunakan wildcard origin/headers bersamaan dengan credentials (panic di tower-http 0.6.x).
     let cors = CorsLayer::new()
@@ -866,7 +860,7 @@ async fn start_local_server() {
         .allow_headers(AllowHeaders::mirror_request())
         .allow_credentials(true);
 
-    let app = Router::new()
+    Router::new()
         .route("/api/health", get(|| async { Json(json!({"ok": true, "app": "tetuko"})) }))
         .route("/api/rpc", post(rpc_handler))
         .route("/api/upload", any(upload_handler))
@@ -880,13 +874,27 @@ async fn start_local_server() {
         .route("/ep/", any(ep_proxy))
         .route("/ep/{*rest}", any(ep_proxy))
         .layer(cors)
-        .with_state(state);
+        .with_state(state)
+}
 
+async fn start_local_server() {
+    let client = match reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("[TETUKO] Gagal membuat HTTP client lokal: {}", e);
+            return;
+        }
+    };
+
+    let state = Arc::new(AppState { client });
     let addr = SocketAddr::from(([127, 0, 0, 1], LOCAL_PORT));
     match tokio::net::TcpListener::bind(addr).await {
         Ok(listener) => {
             eprintln!("Server lokal TETUKO aktif di http://{}", addr);
-            if let Err(e) = axum::serve(listener, app).await {
+            if let Err(e) = axum::serve(listener, build_router(state)).await {
                 eprintln!("Server lokal TETUKO berhenti: {}", e);
             }
         }
@@ -897,7 +905,7 @@ async fn start_local_server() {
                 let alt = SocketAddr::from(([127, 0, 0, 1], p));
                 if let Ok(listener) = tokio::net::TcpListener::bind(alt).await {
                     eprintln!("Server lokal TETUKO berjalan di port alternatif http://{}", alt);
-                    if let Err(err) = axum::serve(listener, app).await {
+                    if let Err(err) = axum::serve(listener, build_router(state.clone())).await {
                         eprintln!("Server lokal TETUKO (alt) berhenti: {}", err);
                     }
                     return;

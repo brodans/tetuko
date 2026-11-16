@@ -377,7 +377,7 @@ async fn send_notification(app: &AppHandle, title: &str, body: &str) {
     }
 }
 
-fn photo_for(manager: &mut AutomationStateFile, qkey: &str, ids: &[String], _preset_key: &str, stock: &[StockPhoto]) -> Option<(String, String)> {
+fn photo_for(manager: &mut AutomationStateFile, qkey: &str, ids: &[String], stock: &[StockPhoto]) -> Option<(String, String)> {
     let valid: HashSet<String> = ids.iter().cloned().collect();
     let mut queue = manager.runtime.photo_queues.get(qkey).cloned().unwrap_or_default();
     queue.retain(|id| valid.contains(id));
@@ -563,9 +563,12 @@ async fn submit_ponorogo_unified(app: &AppHandle, mgr: &AutomationManager, profi
     let qkey = format!("{}::{}::{}", profile_key, username, preset.id);
     let (foto_id, foto_data) = {
         let mut st = mgr.state.write().await;
-        match photo_for(&mut st, &qkey, &preset.stock_foto_ids, &preset.id, &profile.stock_photos) {
+        match photo_for(&mut st, &qkey, &preset.stock_foto_ids, &profile.stock_photos) {
             Some(v) => v,
-            None => return (false, "Foto preset tidak tersedia".into()),
+            None => {
+                drop(st);
+                return (false, "Foto preset tidak tersedia".into());
+            }
         }
     };
     mgr.save().await;
@@ -605,8 +608,10 @@ async fn submit_ponorogo_unified(app: &AppHandle, mgr: &AutomationManager, profi
         ("versi".into(), { let v=get_str(cfg,&["versi"]); if v.is_empty(){ "1.0.0".into()} else {v} }),
         ("tipe".into(), preset.tipe.clone()),
     ];
-    // helper closure-like not possible; fill empties from peg for some
-    // (already handled roughly)
+    let _ = id_pegawai; // tersedia untuk kompatibilitas payload/logika upstream bila dibutuhkan
+    if device_id.is_empty() && !cfg.get("imei").is_some() && !peg.get("imei").is_some() {
+        // biarkan kosong; beberapa server menerima nilai kosong, validasi dilakukan upstream
+    }
 
     let api_base = if !profile.ponorogo_api_base.is_empty() { profile.ponorogo_api_base.clone() } else { "http://103.109.206.102:8089/Ponorogo-absensApi/index.php".into() };
     let url = format!("{}/login/absen_mobile", api_base.trim_end_matches('/'));
