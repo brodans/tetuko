@@ -19,7 +19,7 @@ import PonorogoUbahPasswordModal from './components/PonorogoUbahPasswordModal';
 import PageSkeleton from './components/ui/PageSkeleton';
 import { isTauriRuntime } from './lib/nativeAutomation';
 import { listenTrayNavigate, type TrayNavigateTarget } from './lib/nativeTray';
-import type { ServerProfileId } from './lib/serverProfiles';
+import { SERVER_PROFILES, type ServerProfileId } from './lib/serverProfiles';
 import { apiUrl } from './lib/apiBase';
 import { AUTOMATION_AVAILABLE } from './lib/deployMode';
 import { navigateTo, pageToPath, pathToRoute, slugToPageId, defaultPageForProfile } from './lib/routes';
@@ -30,18 +30,19 @@ import { isMenuAllowed, isProfileAllowed } from './lib/appUserManager';
 
 type PageModule = { default: React.ComponentType };
 
-function trayTargetToProfile(target: TrayNavigateTarget): ServerProfileId {
+function trayTargetToProfile(target: TrayNavigateTarget): ServerProfileId | null {
+  if (target === 'preset') return null;
   if (target === 'absen:jatim') return 'jatim';
   if (target === 'absen:madiun') return 'madiun';
   return 'ponorogo';
 }
-function trayTargetToPageId(target: TrayNavigateTarget, profileId: ServerProfileId): string {
-  if (profileId === 'ponorogo') {
-    if (target === 'ponorogo:database') return 'tabDatabase';
-    if (target === 'ponorogo:produktifitas-harian') return 'tabInputAktivitas';
-    return 'tabAbsen';
-  }
-  return 'tabPresensi';
+function trayTargetToPageId(target: TrayNavigateTarget, profileId?: ServerProfileId | null): string {
+  if (target === 'preset') return 'preset';
+  if (target === 'absen:jatim' || target === 'absen:madiun' || target === 'absen:ponorogo') return 'tabPresensi';
+  if (target === 'ponorogo:produktifitas-harian') return 'tabInputAktivitas';
+  if (target === 'ponorogo:database') return 'tabDatabase';
+  if (profileId) return defaultPageForProfile(profileId, SERVER_PROFILES.find(p => p.id === profileId)?.mode || 'bkd-rpc');
+  return 'beranda';
 }
 const PENDING_TRAY_TARGET_KEY = 'tetuko_pending_tray_target';
 const pageImporters = {
@@ -541,22 +542,40 @@ function AppRouter({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggle
             navigateTo('/masuk', true);
             return;
           }
+
+          // Preset Otomasi: langsung buka ServerHub tab Preset
+          if (target === 'preset') {
+            try { sessionStorage.removeItem(PENDING_TRAY_TARGET_KEY); } catch {}
+            try { logout(); } catch {}
+            navigateTo('/login', true);
+            setTimeout(() => {
+              try { window.dispatchEvent(new CustomEvent('tetuko-tray-open-hub', { detail: { tab: 'preset' } })); } catch {}
+            }, 60);
+            return;
+          }
+
           // Belum login server / sesi server tidak cocok -> buka ServerHub dan pilih profil target
-          if (!pegawai || serverProfile.id !== targetProfile) {
+          if (!pegawai || !targetProfile || serverProfile.id !== targetProfile) {
             try { sessionStorage.setItem(PENDING_TRAY_TARGET_KEY, JSON.stringify({ target, targetProfile, targetPage })); } catch {}
             // jika sedang di server lain, kembali ke hub agar bisa login profil target
             try { logout(); } catch {}
             navigateTo('/login', true);
             setTimeout(() => {
-              try { window.dispatchEvent(new CustomEvent('tetuko-tray-open-profile', { detail: { profileId: targetProfile, autoLogin: true } })); } catch {}
-            }, 50);
+              if (targetProfile) {
+                try { window.dispatchEvent(new CustomEvent('tetuko-tray-open-profile', { detail: { profileId: targetProfile, autoLogin: true } })); } catch {}
+              }
+            }, 60);
             return;
           }
+
           // Sesi aktif & profil cocok -> langsung ke menu tujuan
+          try { sessionStorage.removeItem(PENDING_TRAY_TARGET_KEY); } catch {}
           if (serverProfile.mode === 'ponorogo-absensi') {
             try { window.dispatchEvent(new CustomEvent('tetuko-tray-open-page', { detail: { profileId: targetProfile, pageId: targetPage } })); } catch {}
           } else {
             setBkdActivePage(targetPage);
+            const path = pageToPath(targetProfile, serverProfile.mode, targetPage);
+            navigateTo(path, true);
           }
         });
       } catch (e) {
@@ -575,7 +594,8 @@ function AppRouter({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggle
       pending = raw ? JSON.parse(raw) : null;
     } catch {}
     if (!pending) return;
-    if (pending.targetProfile !== serverProfile.id) return;
+    if (pending.target === 'preset') { try { sessionStorage.removeItem(PENDING_TRAY_TARGET_KEY); } catch {} return; }
+    if (!pending.targetProfile || pending.targetProfile !== serverProfile.id) return;
     try { sessionStorage.removeItem(PENDING_TRAY_TARGET_KEY); } catch {}
     const pageId = pending.targetPage || trayTargetToPageId(pending.target as TrayNavigateTarget, serverProfile.id as ServerProfileId);
     if (serverProfile.mode === 'ponorogo-absensi') {
@@ -584,6 +604,7 @@ function AppRouter({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggle
       }, 0);
     } else {
       setBkdActivePage(pageId);
+      try { navigateTo(pageToPath(serverProfile.id, serverProfile.mode, pageId), true); } catch {}
     }
   }, [pegawai, serverProfile.id, serverProfile.mode, setBkdActivePage]);
 
@@ -607,7 +628,18 @@ function AppRouter({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggle
     if (r.kind !== 'app' || r.profileId !== serverProfile.id) {
       const keepSlug = r.kind === 'app' && r.profileId === serverProfile.id ? r.pageId : null;
       const keepPageId = keepSlug ? slugToPageId(serverProfile.id, serverProfile.mode, keepSlug) : null;
-      const path = pageToPath(serverProfile.id, serverProfile.mode, keepPageId || defaultPageForProfile(serverProfile.id, serverProfile.mode));
+      let targetPageId = keepPageId || null;
+      if (!targetPageId) {
+        try {
+          const raw = sessionStorage.getItem(PENDING_TRAY_TARGET_KEY);
+          const pending = raw ? JSON.parse(raw) : null;
+          if (pending && pending.target !== 'preset' && pending.targetProfile === serverProfile.id) {
+            targetPageId = pending.targetPage || trayTargetToPageId(pending.target as TrayNavigateTarget, serverProfile.id as ServerProfileId);
+          }
+        } catch {}
+      }
+      if (!targetPageId) targetPageId = defaultPageForProfile(serverProfile.id, serverProfile.mode);
+      const path = pageToPath(serverProfile.id, serverProfile.mode, targetPageId);
       if (pathname !== path) navigateTo(path, true);
       const nr = pathToRoute(path);
       const nextSlug = nr.kind === 'app' ? (nr.pageId || null) : null;

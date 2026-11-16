@@ -290,6 +290,25 @@ export default function ServerHub({ isDarkMode, toggleDarkMode, onAppLogout }: P
     return () => window.removeEventListener('tetuko-tray-open-profile', handler as any);
   }, [accountKey, doLogin, refreshSavedForProfile, visibleProfiles]);
 
+  // Buka tab ServerHub tertentu dari tray (mis. Preset Otomasi)
+  useEffect(() => {
+    const handler = (ev: Event) => {
+      const detail = (ev as CustomEvent<any>).detail || {};
+      if (detail.tab === 'preset') {
+        setError(null);
+        setConnecting(false);
+        setNeedsCreds(false);
+        setSelected(null);
+        resetRecovery();
+        setHubTab('preset');
+      } else if (detail.tab === 'server') {
+        setHubTab('server');
+      }
+    };
+    window.addEventListener('tetuko-tray-open-hub', handler as any);
+    return () => window.removeEventListener('tetuko-tray-open-hub', handler as any);
+  }, [resetRecovery]);
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selected) return;
@@ -354,17 +373,25 @@ export default function ServerHub({ isDarkMode, toggleDarkMode, onAppLogout }: P
 
       <div className="relative z-10 min-h-full w-full flex items-center justify-center">
         <div className="w-full max-w-2xl rounded-3xl border border-slate-300 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-xl shadow-slate-300/50 dark:shadow-slate-900/30 p-5 sm:p-7 md:p-8">
-          <div className="flex items-start justify-between gap-4 pb-5 border-b border-slate-200/80 dark:border-slate-800">
-            <div className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center overflow-hidden shrink-0">
-              <img src={APP_LOGO} alt="Logo" className="w-9 h-9 object-contain" />
+          <div className="flex flex-col gap-4 pb-5 border-b border-slate-200/80 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
+              <div className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center overflow-hidden shrink-0">
+                <img src={APP_LOGO} alt="Logo" className="w-9 h-9 object-contain" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-blue-600 dark:text-blue-400">TETUKO</div>
+                <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-slate-100 leading-tight">Pilih Server Presensi</h1>
+                <p className="mt-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed">Masuk ke server presensi Anda.</p>
+                {appSession && (
+                  <p className="mt-1.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300 flex flex-wrap items-center gap-1.5">
+                    <span>Sesi:</span>
+                    <span className="text-blue-600 dark:text-blue-400">@{appSession.user?.username || 'admin'}</span>
+                    <span className="uppercase text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">{appSession.role}</span>
+                  </p>
+                )}
+              </div>
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-blue-600 dark:text-blue-400">TETUKO</div>
-              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-slate-100 leading-tight">Pilih Server Presensi</h1>
-              <p className="mt-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400">Masuk ke server presensi Anda.</p>
-              {appSession && <p className="mt-1 text-[11px] font-semibold text-slate-600 dark:text-slate-300">Sesi: <span className="text-blue-600 dark:text-blue-400">@{appSession.user?.username || 'admin'}</span> <span className="uppercase text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 ml-1">{appSession.role}</span></p>}
-            </div>
-            <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end sm:shrink-0">
               {isTauri && (
                 <button
                   type="button"

@@ -6,7 +6,8 @@ export type TrayNavigateTarget =
   | 'absen:madiun'
   | 'absen:ponorogo'
   | 'ponorogo:produktifitas-harian'
-  | 'ponorogo:database';
+  | 'ponorogo:database'
+  | 'preset';
 
 export async function getAutostartEnabled(): Promise<boolean> {
   if (!isTauriRuntime()) return false;

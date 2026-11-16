@@ -1193,6 +1193,9 @@ fn build_tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         ],
     )?;
 
+    let preset_otomasi =
+        MenuItem::with_id(app, "nav:preset", "Preset Otomasi", true, None::<&str>)?;
+
     let sep2 = PredefinedMenuItem::separator(app)?;
     let autostart_enabled = app.autolaunch().is_enabled().unwrap_or(false);
     let autostart_i = CheckMenuItem::with_id(
@@ -1204,7 +1207,7 @@ fn build_tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         None::<&str>,
     )?;
     let sep3 = PredefinedMenuItem::separator(app)?;
-    let quit_i = MenuItem::with_id(app, "quit", "Keluar TETUKO", true, None::<&str>)?;
+    let quit_i = MenuItem::with_id(app, "quit", "Keluar", true, None::<&str>)?;
 
     Menu::with_items(
         app,
@@ -1213,6 +1216,7 @@ fn build_tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
             &hide_i,
             &sep1,
             &submenu_quick,
+            &preset_otomasi,
             &sep2,
             &autostart_i,
             &sep3,
@@ -1259,6 +1263,7 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
                     emit_tray_navigate(app, "ponorogo:produktifitas-harian")
                 }
                 "nav:ponorogo:database" => emit_tray_navigate(app, "ponorogo:database"),
+                "nav:preset" => emit_tray_navigate(app, "preset"),
                 _ => {}
             }
         })
@@ -1286,7 +1291,7 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
     }
 
     let tray = builder.build(app)?;
-    // Jaga tray tetap hidup selama aplikasi berjalan (keluar hanya via menu tray "Keluar TETUKO")
+    // Jaga tray tetap hidup selama aplikasi berjalan (keluar hanya via menu tray "Keluar")
     app.manage(tray);
     Ok(())
 }
@@ -1360,7 +1365,7 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 // Tutup jendela = sembunyi ke tray (tidak mematikan proses/tray/automasi).
-                // Keluar aplikasi hanya melalui menu tray "Keluar TETUKO".
+                // Keluar aplikasi hanya melalui menu tray "Keluar".
                 let app = window.app_handle();
                 hide_main_window(app);
                 api.prevent_close();
