@@ -338,7 +338,7 @@ fn preset_checktype_label(tipe: &str) -> &'static str {
     }
 }
 
-async fn bkd_already_checked_in(
+async fn bkd_checktype_recorded(
     mgr: &AutomationManager,
     profile: &ProfileAutomation,
     preset: &UnifiedPreset,
@@ -420,6 +420,32 @@ async fn bkd_already_checked_in(
             if target == "siang" && (ct == "2" || ct.contains("custom")) {
                 return true;
             }
+        }
+    }
+    false
+}
+
+async fn bkd_already_checked_in(
+    mgr: &AutomationManager,
+    profile: &ProfileAutomation,
+    preset: &UnifiedPreset,
+    tanggal: &str,
+) -> bool {
+    bkd_checktype_recorded(mgr, profile, preset, tanggal).await
+}
+
+async fn bkd_verify_checked_in(
+    mgr: &AutomationManager,
+    profile: &ProfileAutomation,
+    preset: &UnifiedPreset,
+    tanggal: &str,
+) -> bool {
+    for attempt in 0..3 {
+        if attempt > 0 {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        }
+        if bkd_checktype_recorded(mgr, profile, preset, tanggal).await {
+            return true;
         }
     }
     false
@@ -649,39 +675,75 @@ async fn submit_bkd(
         .send()
         .await;
 
-    let (ok, msg) = match resp {
+    let (mut ok, mut msg) = match resp {
         Ok(r) => {
             let status = r.status();
             let text = r.text().await.unwrap_or_default();
             let v: Value = serde_json::from_str(&text).unwrap_or(json!({"error": text}));
+            let server_msg = v
+                .get("message")
+                .or_else(|| v.get("error"))
+                .and_then(|x| x.as_str())
+                .unwrap_or("")
+                .to_string();
             if !status.is_success() {
                 (
                     false,
-                    v.get("error")
-                        .and_then(|x| x.as_str())
-                        .unwrap_or("Gagal presensi BKD")
-                        .to_string(),
+                    if server_msg.is_empty() {
+                        "Gagal presensi BKD".to_string()
+                    } else {
+                        server_msg
+                    },
                 )
             } else if v.get("absen").and_then(|x| x.as_bool()) == Some(false) {
                 (
                     false,
-                    v.get("message")
-                        .and_then(|x| x.as_str())
-                        .unwrap_or("Server menolak presensi")
-                        .to_string(),
+                    if server_msg.is_empty() {
+                        "Server menolak presensi".to_string()
+                    } else {
+                        server_msg
+                    },
                 )
             } else {
                 (
                     true,
-                    v.get("message")
-                        .and_then(|x| x.as_str())
-                        .unwrap_or("Presensi berhasil")
-                        .to_string(),
+                    if server_msg.is_empty() {
+                        "Respons submit diterima".to_string()
+                    } else {
+                        server_msg
+                    },
                 )
             }
         }
         Err(e) => (false, format!("Gagal menghubungi gateway: {}", e)),
     };
+
+    // Validasi ke server: presensi dianggap berhasil hanya jika tercatat di history_absen
+    if ok {
+        if bkd_verify_checked_in(mgr, profile, preset, &tanggal).await {
+            msg = "Presensi berhasil dan tervalidasi di server.".to_string();
+        } else {
+            ok = false;
+            let lower = msg.to_ascii_lowercase();
+            if lower.contains("rentang")
+                || lower.contains("belum masuk")
+                || lower.contains("di luar")
+                || lower.contains("diluar")
+                || lower.contains("waktu")
+            {
+                // pertahankan pesan server yang relevan
+            } else if msg.trim().is_empty() || msg == "Respons submit diterima" {
+                msg = "Presensi tidak terkonfirmasi di server (belum tercatat / di luar rentang waktu server).".to_string();
+            } else {
+                msg = format!(
+                    "{} (belum terkonfirmasi/tercatat di server, kemungkinan di luar rentang waktu).",
+                    msg
+                );
+            }
+        }
+    } else if msg.trim().is_empty() {
+        msg = "Presensi gagal / tidak masuk rentang waktu server.".to_string();
+    }
 
     // write log
     {
@@ -949,61 +1011,137 @@ async fn submit_ponorogo_unified(
             let status = r.status();
             let text = r.text().await.unwrap_or_default();
             let v: Value = serde_json::from_str(&text).unwrap_or(json!({"raw": text}));
+            let msg_text = v
+                .get("message")
+                .or_else(|| v.get("msg"))
+                .and_then(|x| x.as_str())
+                .unwrap_or("")
+                .to_string();
+            let m = msg_text.to_lowercase();
+            let already_recorded = m.contains("sudah absen")
+                || m.contains("sudah melakukan")
+                || m.contains("sudah presensi")
+                || m.contains("sudah hadir")
+                || m.contains("sudah check");
+            let out_of_range = m.contains("rentang")
+                || m.contains("diluar waktu")
+                || m.contains("di luar waktu")
+                || m.contains("belum masuk jam")
+                || m.contains("belum waktunya")
+                || m.contains("bukan waktu")
+                || m.contains("waktu presensi")
+                    && (m.contains("belum")
+                        || m.contains("tutup")
+                        || m.contains("habis")
+                        || m.contains("diluar")
+                        || m.contains("di luar"));
+            let failed_hint = m.contains("gagal")
+                || m.contains("ditolak")
+                || m.contains("tidak bisa")
+                || m.contains("tidak dapat")
+                || m.contains("invalid")
+                || m.contains("error")
+                || out_of_range;
+
             if !status.is_success() {
                 (
                     false,
-                    v.get("message")
-                        .and_then(|x| x.as_str())
-                        .unwrap_or("Gagal presensi Ponorogo")
-                        .to_string(),
+                    if msg_text.is_empty() {
+                        "Gagal presensi Ponorogo".to_string()
+                    } else {
+                        msg_text
+                    },
                 )
+            } else if v.get("success") == Some(&Value::Bool(false))
+                || v.get("status") == Some(&Value::Bool(false))
+                || v.get("code")
+                    .and_then(|x| x.as_i64())
+                    .map(|c| c >= 400)
+                    .unwrap_or(false)
+            {
+                if already_recorded {
+                    (
+                        true,
+                        if msg_text.is_empty() {
+                            "Presensi sudah tercatat di server.".to_string()
+                        } else {
+                            msg_text
+                        },
+                    )
+                } else {
+                    (
+                        false,
+                        if msg_text.is_empty() {
+                            "Presensi tidak masuk / ditolak server (cek rentang waktu presensi)."
+                                .to_string()
+                        } else {
+                            msg_text
+                        },
+                    )
+                }
             } else if v.get("success") == Some(&Value::Bool(true))
                 || v.get("status") == Some(&Value::Bool(true))
                 || v.get("status") == Some(&Value::String("success".into()))
                 || v.get("code") == Some(&json!(200))
             {
+                if failed_hint
+                    && !already_recorded
+                    && !(m.contains("berhasil") || m.contains("sukses"))
+                {
+                    (
+                        false,
+                        if msg_text.is_empty() {
+                            "Presensi tidak masuk / di luar rentang waktu server.".to_string()
+                        } else {
+                            msg_text
+                        },
+                    )
+                } else {
+                    (
+                        true,
+                        if msg_text.is_empty() {
+                            "Presensi berhasil (respons server).".to_string()
+                        } else {
+                            msg_text
+                        },
+                    )
+                }
+            } else if already_recorded {
                 (
                     true,
-                    v.get("message")
-                        .and_then(|x| x.as_str())
-                        .unwrap_or("Presensi berhasil")
-                        .to_string(),
+                    if msg_text.is_empty() {
+                        "Presensi sudah tercatat di server.".to_string()
+                    } else {
+                        msg_text
+                    },
                 )
-            } else if v.get("success") == Some(&Value::Bool(false))
-                || v.get("status") == Some(&Value::Bool(false))
-            {
-                let msg_text = v
-                    .get("message")
-                    .and_then(|x| x.as_str())
-                    .unwrap_or("Server menolak presensi")
-                    .to_string();
-                let m = msg_text.to_lowercase();
-                if m.contains("sudah absen")
-                    || m.contains("sudah melakukan")
-                    || m.contains("sudah presensi")
-                    || m.contains("sudah hadir")
-                {
-                    (true, msg_text)
-                } else {
-                    (false, msg_text)
-                }
+            } else if failed_hint {
+                (
+                    false,
+                    if msg_text.is_empty() {
+                        "Presensi tidak masuk / di luar rentang waktu server.".to_string()
+                    } else {
+                        msg_text
+                    },
+                )
+            } else if m.contains("berhasil") || m.contains("sukses") {
+                (
+                    true,
+                    if msg_text.is_empty() {
+                        "Presensi berhasil (respons server).".to_string()
+                    } else {
+                        msg_text
+                    },
+                )
             } else {
-                let msg_text = v
-                    .get("message")
-                    .and_then(|x| x.as_str())
-                    .unwrap_or("Respons server tidak dikenali")
-                    .to_string();
-                let m = msg_text.to_lowercase();
-                if m.contains("berhasil")
-                    || m.contains("sukses")
-                    || m.contains("sudah absen")
-                    || m.contains("sudah melakukan")
-                    || m.contains("sudah presensi")
-                {
-                    (true, msg_text)
-                } else {
-                    (false, msg_text)
-                }
+                (
+                    false,
+                    if msg_text.is_empty() {
+                        "Presensi tidak terkonfirmasi (respons server tidak jelas).".to_string()
+                    } else {
+                        msg_text
+                    },
+                )
             }
         }
         Err(e) => (false, format!("Gagal menghubungi server Ponorogo: {}", e)),
