@@ -1284,7 +1284,9 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
         builder = builder.icon(icon);
     }
 
-    let _tray = builder.build(app)?;
+    let tray = builder.build(app)?;
+    // Jaga tray tetap hidup selama aplikasi berjalan (keluar hanya via menu tray "Keluar TETUKO")
+    app.manage(tray);
     Ok(())
 }
 
@@ -1356,7 +1358,8 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
-                // Biarkan aplikasi tetap berjalan di background/tray untuk automasi & notifikasi
+                // Tutup jendela = sembunyi ke tray (tidak mematikan proses/tray/automasi).
+                // Keluar aplikasi hanya melalui menu tray "Keluar TETUKO".
                 let app = window.app_handle();
                 hide_main_window(app);
                 api.prevent_close();
