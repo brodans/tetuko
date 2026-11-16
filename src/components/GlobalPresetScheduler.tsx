@@ -1,18 +1,14 @@
 /**
- * Komponen Scheduler Global untuk Preset Otomatisasi Presensi.
+ * Global Preset Automation Bridge (UI <-> Native Rust backend).
  *
- * Berjalan di tingkat atas aplikasi (AppShell), sehingga penjadwal tetap aktif
- * memantau waktu presensi baik saat pengguna berada di Beranda, Presensi,
- * maupun tab lainnya, serta saat aplikasi diminimalkan (background / AppImage).
- *
- * - JS fallback: useAutoPresensi (web/non-native path atau fallback)
- * - Native Tauri: sinkronisasi state ke Rust scheduler + listener event/notifikasi
+ * - Sinkronisasi preset/konteks aktif ke scheduler Rust (Tauri native).
+ * - Mendengarkan event eksekusi/notifikasi dari Rust dan menyinkronkan log/UI.
+ * - Tidak menjalankan eksekusi preset di JavaScript (backend automasi preset = Rust).
  */
 
 import { useEffect, useState, useCallback } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useServerContext } from '../hooks/useServerContext';
-import { useAutoPresensi } from '../hooks/useAutoPresensi';
 import {
   bacaSemuaPreset,
   bacaSemuaStockFoto,
@@ -20,7 +16,7 @@ import {
   type PresetOtomatisasi,
 } from '../lib/presetOtomatisasi';
 import { bacaStorage, tulisStorage } from '../lib/storageAman';
-import { isTauriRuntime, isNativeAutomationPreferred, syncNativeAutomation, setNativeScheduler } from '../lib/nativeAutomation';
+import { isTauriRuntime, syncNativeAutomation, setNativeScheduler } from '../lib/nativeAutomation';
 import { bacaTitik } from '../lib/lokasiTersimpan';
 import { getServerProfile } from '../lib/serverProfiles';
 import { bacaSemuaPreset as bacaSemuaPresetLegacy, bacaSemuaStockFoto as bacaSemuaStockFotoLegacy } from '../lib/presetAutomasi';
@@ -96,11 +92,11 @@ function GlobalPresetSchedulerInner() {
     };
   }, [muatPreset]);
 
-  const nativePreferred = isNativeAutomationPreferred();
+  const tauri = isTauriRuntime();
 
   // Listener event automasi native (Tauri/Rust) -> fallback notifikasi & sinkronisasi log UI
   useEffect(() => {
-    if (!isTauriRuntime()) return;
+    if (!tauri) return;
     let unsubs: Array<() => void> = [];
     let cancelled = false;
 
@@ -113,7 +109,6 @@ function GlobalPresetSchedulerInner() {
           const p = ev?.payload || {};
           const title = String(p.title || 'TETUKO');
           const body = String(p.body || '');
-          // Tampilkan juga via frontend (fallback bila notifikasi plugin native tidak muncul di beberapa lingkungan Linux)
           try { await kirimNotifikasiNative(title, body); } catch {}
         });
         unsubs.push(u1);
@@ -125,13 +120,14 @@ function GlobalPresetSchedulerInner() {
               await tulisLogOtomatisasi(String(p.username), {
                 presetId: String(p.preset_id),
                 tanggal: String(p.tanggal),
-                eksekusiPada: String(p.executed_at || new Date().toISOString()),
-                berhasil: !!p.success,
+                eksekusiPada: Number(p.eksekusi_pada || Date.now()),
+                berhasil: !!p.ok || !!p.success,
                 pesan: p.message ? String(p.message) : undefined,
+                lokasiDipilih: p.lokasi_dipilih ? String(p.lokasi_dipilih) : undefined,
+                fotoDipilih: p.foto_dipilih ? String(p.foto_dipilih) : undefined,
               } as any, String(p.profile_id));
             }
           } catch {}
-          // beri sinyal UI refresh preset/log
           try { window.dispatchEvent(new CustomEvent('presensi-automasi-updated')); } catch {}
           void muatPreset();
         });
@@ -145,15 +141,15 @@ function GlobalPresetSchedulerInner() {
       cancelled = true;
       for (const u of unsubs) try { u(); } catch {}
     };
-  }, [muatPreset]);
+  }, [muatPreset, tauri]);
 
   useEffect(() => {
-    if (!nativePreferred) return;
+    if (!tauri) return;
     void setNativeScheduler(serverProfileId, penjadwalAktif);
-  }, [nativePreferred, serverProfileId, penjadwalAktif]);
+  }, [tauri, serverProfileId, penjadwalAktif]);
 
   useEffect(() => {
-    if (!nativePreferred || !username) return;
+    if (!tauri || !username) return;
 
     let cancelled = false;
     (async () => {
@@ -233,14 +229,10 @@ function GlobalPresetSchedulerInner() {
     })();
 
     return () => { cancelled = true; };
-  }, [nativePreferred, username, serverProfileId, penjadwalAktif, pegawai, presets]);
+  }, [tauri, username, serverProfileId, penjadwalAktif, pegawai, presets]);
 
-  // Jalankan scheduler latar belakang (JS fallback; di Tauri native menangani eksekusi)
-  useAutoPresensi({
-    presets,
-    aktif: !nativePreferred && penjadwalAktif && ready && !!username && !!pegawai,
-  });
-
+  // Backend eksekusi automasi preset berjalan di Rust native (Tauri). Komponen ini hanya sinkronisasi UI/state.
+  void ready; // menjaga dependency semantik konteks
   return null;
 }
 
