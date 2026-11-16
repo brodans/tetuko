@@ -16,6 +16,7 @@ import DeveloperInspector from './components/DeveloperInspector';
 import AppLoginScreen from './components/AppLoginScreen';
 import ProfilServerAkunModal from './components/ProfilServerAkunModal';
 import PonorogoUbahPasswordModal from './components/PonorogoUbahPasswordModal';
+import PageSkeleton from './components/ui/PageSkeleton';
 import { apiUrl } from './lib/apiBase';
 import { AUTOMATION_AVAILABLE } from './lib/deployMode';
 import { navigateTo, pageToPath, pathToRoute, slugToPageId, defaultPageForProfile } from './lib/routes';
@@ -107,26 +108,25 @@ function ConfirmLogoutModal({ open, onCancel, onConfirm }: { open: boolean; onCa
   );
 }
 
-function PageFallback() {
+function PageFallback({ pageId }: { pageId?: string }) {
   const [showReset, setShowReset] = React.useState(false);
   React.useEffect(() => {
-    const t = setTimeout(() => setShowReset(true), 6000);
+    const t = setTimeout(() => setShowReset(true), 8000);
     return () => clearTimeout(t);
   }, []);
   return (
-    <div className="min-h-[50vh] w-full flex items-center justify-center p-6">
-      <div className="flex flex-col items-center justify-center text-center gap-3">
-        <div className="h-10 w-10 rounded-full border-2 border-slate-200 dark:border-slate-700 border-t-blue-600 animate-spin" />
-        <div className="text-sm font-medium text-slate-600 dark:text-slate-300">Memuat halaman...</div>
-        {showReset && (
+    <div className="relative">
+      <PageSkeleton pageId={pageId} />
+      {showReset && (
+        <div className="mt-4 flex justify-center">
           <button
             onClick={() => { try { localStorage.removeItem('presensi_local_session_v1'); sessionStorage.clear(); } catch {} window.location.href = window.location.pathname + '?reset=1'; }}
-            className="mt-1 px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-100 text-xs font-semibold"
+            className="px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-100 text-xs font-semibold"
           >
             Terlalu lama? Reset & ke Login
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -242,7 +242,7 @@ function BkdShell({ isDarkMode, toggleDarkMode, devInspectorOpen, onToggleInspec
           ],
         }}
       >
-        <Suspense fallback={<PageFallback />}>
+        <Suspense fallback={<PageFallback pageId={page.id} />}>
           <Page />
         </Suspense>
       </AppShellLayout>
@@ -320,7 +320,7 @@ const PONOROGO_PAGES: PonorogoPageDefinition[] = [
 const PONOROGO_GROUP_LABELS: Record<PonorogoPageGroup, string> = { utama: 'Menu Utama', referensi: 'Referensi', akun: 'Akun & Server' };
 const PONOROGO_GROUP_ORDER: PonorogoPageGroup[] = ['utama', 'referensi'];
 
-function PonorogoPageFallback() { return <PageFallback />; }
+function PonorogoPageFallback({ pageId }: { pageId?: string }) { return <PageFallback pageId={pageId} />; }
 
 function PonorogoShell({ onLogout, isDarkMode, toggleDarkMode, devInspectorOpen, onToggleInspector, routePageSlug }: { onLogout: () => void; isDarkMode: boolean; toggleDarkMode: () => void; devInspectorOpen: boolean; onToggleInspector: () => void; routePageSlug?: string | null; }) {
   const { pegawai, activePage, setActivePage } = usePonorogoAppContext();
@@ -432,7 +432,7 @@ function PonorogoShell({ onLogout, isDarkMode, toggleDarkMode, devInspectorOpen,
           ],
         }}
       >
-        <Suspense fallback={<PonorogoPageFallback />}>
+        <Suspense fallback={<PonorogoPageFallback pageId={page.id} />}>
           <Page />
         </Suspense>
       </AppShellLayout>

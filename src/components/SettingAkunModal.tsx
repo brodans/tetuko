@@ -757,7 +757,7 @@ export default function SettingAkunModal({ onClose }: SettingAkunModalProps) {
         className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl shadow-slate-950/20 h-auto min-h-[min(640px,calc(100dvh-2rem))] max-h-[calc(100dvh-2rem)] border border-slate-200 dark:border-slate-700/80 overflow-hidden flex flex-col will-change-transform"
       >
         {/* Header Modal */}
-        <div className="flex justify-between items-center p-4 sm:p-5 border-b border-slate-100 dark:border-slate-700/80 shrink-0 bg-white/80 dark:bg-slate-800/80 backdrop-blur">
+        <div className="flex justify-between items-center p-4 sm:p-5 border-b border-slate-100 dark:border-slate-700/80 shrink-0 bg-white dark:bg-slate-800">
           <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
             <Lock className="w-5 h-5 text-blue-500" />
             Pengaturan Ponorogo
