@@ -16,6 +16,7 @@ use tauri::{
 };
 use tauri_plugin_autostart::ManagerExt;
 mod automation;
+mod firestore_pull;
 use tower_http::cors::{AllowHeaders, AllowOrigin, CorsLayer};
 
 const PRESENSI_VERSION: u64 = 89;
