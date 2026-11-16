@@ -472,11 +472,18 @@ async fn submit_bkd(
 
     // choose random trigger time within window
     {
-        let mut st = mgr.state.write().await;
-        if !st.runtime.random_times.contains_key(&rand_key) {
-            if let Some(t) = random_time_in_range(&preset.jam_mulai, &preset.jam_selesai) {
-                st.runtime.random_times.insert(rand_key.clone(), t);
+        let mut need_save = false;
+        {
+            let mut st = mgr.state.write().await;
+            if !st.runtime.random_times.contains_key(&rand_key) {
+                if let Some(t) = random_time_in_range(&preset.jam_mulai, &preset.jam_selesai) {
+                    st.runtime.random_times.insert(rand_key.clone(), t);
+                    need_save = true;
+                }
             }
+        }
+        if need_save {
+            mgr.save().await;
         }
     }
     let chosen = {
@@ -722,11 +729,18 @@ async fn submit_ponorogo_unified(
     let log_key = format!("{}::{}::{}", profile_key, username, tanggal);
     let rand_key = format!("{}::{}::{}::{}", profile_key, username, preset.id, tanggal);
     {
-        let mut st = mgr.state.write().await;
-        if !st.runtime.random_times.contains_key(&rand_key) {
-            if let Some(t) = random_time_in_range(&preset.jam_mulai, &preset.jam_selesai) {
-                st.runtime.random_times.insert(rand_key.clone(), t);
+        let mut need_save = false;
+        {
+            let mut st = mgr.state.write().await;
+            if !st.runtime.random_times.contains_key(&rand_key) {
+                if let Some(t) = random_time_in_range(&preset.jam_mulai, &preset.jam_selesai) {
+                    st.runtime.random_times.insert(rand_key.clone(), t);
+                    need_save = true;
+                }
             }
+        }
+        if need_save {
+            mgr.save().await;
         }
     }
     let chosen = {
