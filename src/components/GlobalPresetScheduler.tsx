@@ -24,6 +24,7 @@ import { AUTOMATION_AVAILABLE } from '../lib/deployMode';
 import { kirimNotifikasiNative } from '../lib/notifikasi';
 import { loadAppAuthSession } from '../lib/appAuthSession';
 import { loadAllServerCreds } from '../lib/loginCredsStore';
+import { loadNativeSessionContext } from '../lib/nativeSessionContextStore';
 
 const KUNCI_STORAGE_PENJADWAL = 'presensi_penjadwal_otomatis_aktif';
 
@@ -185,35 +186,29 @@ function GlobalPresetSchedulerInner() {
             legacy = await bacaSemuaPresetLegacy(uname).catch(() => []);
           }
           const isActiveCtx = !!username && uname === username && pid === serverProfileId;
-          const bkdCtx = isActiveCtx ? {
-            api_key: String(activePegawaiAny.apiKey || activePegawaiAny.api_key || ''),
-            imei: String(activePegawaiAny.imei || cred?.imei || activePegawaiAny.deviceId || ''),
-            last_latlong: String(activePegawaiAny.lastLatLong || activePegawaiAny.last_latlong || (activePegawaiAny.latitude && activePegawaiAny.longitude ? `${activePegawaiAny.latitude},${activePegawaiAny.longitude}` : '') || ''),
-            nip: String(activePegawaiAny.nip || uname),
-          } : {
-            api_key: String(activePegawaiAny.apiKey && (activePegawaiAny.nip === uname || !activePegawaiAny.nip) && pid === serverProfileId ? activePegawaiAny.apiKey : ''),
-            imei: String(cred?.imei || ''),
-            last_latlong: '',
-            nip: uname,
+          const storedCtx = isActiveCtx ? null : await loadNativeSessionContext(pid, uname).catch(() => null);
+          const ctxAny = isActiveCtx ? activePegawaiAny : (storedCtx || {});
+          const bkdCtx = {
+            api_key: String(ctxAny.apiKey || ctxAny.api_key || (isActiveCtx ? activePegawaiAny.apiKey : '') || ''),
+            imei: String(ctxAny.imei || cred?.imei || ctxAny.deviceId || ctxAny.device_id || ''),
+            last_latlong: String(ctxAny.lastLatLong || ctxAny.last_latlong || (ctxAny.latitude && ctxAny.longitude ? `${ctxAny.latitude},${ctxAny.longitude}` : '') || ''),
+            nip: String(ctxAny.nip || uname),
           };
           const ponorogoCtx = profileMeta.mode === 'ponorogo-absensi'
-            ? (isActiveCtx ? {
+            ? {
                 config: {
-                  idPegawai: String(activePegawaiAny.id || activePegawaiAny.idPegawai || activePegawaiAny.pegawai_id || ''),
-                  deviceId: String(activePegawaiAny.imei || cred?.imei || activePegawaiAny.deviceId || activePegawaiAny.device_id || activePegawaiAny.emei || ''),
-                  latitude: String(activePegawaiAny.latitude || ''),
-                  longitude: String(activePegawaiAny.longitude || ''),
-                  idLokasi: String(activePegawaiAny.idLokasi || activePegawaiAny.id_lokasi || ''),
-                  kodeInstansi: String(activePegawaiAny.kodeInstansi || activePegawaiAny.kode_instansi || ''),
-                  kodeUnor: String(activePegawaiAny.kodeUnor || activePegawaiAny.kode_unor || activePegawaiAny.unor || ''),
-                  workMode: String(activePegawaiAny.workMode || activePegawaiAny.work_mode || '1'),
-                  versi: String(activePegawaiAny.versi || '2.0.0'),
+                  idPegawai: String(ctxAny.id || ctxAny.idPegawai || ctxAny.pegawai_id || ctxAny.id_pegawai || ''),
+                  deviceId: String(ctxAny.imei || cred?.imei || ctxAny.deviceId || ctxAny.device_id || ctxAny.emei || ctxAny.sim_serial || ''),
+                  latitude: String(ctxAny.latitude || ctxAny.lat || ''),
+                  longitude: String(ctxAny.longitude || ctxAny.long || ctxAny.longtitude || ''),
+                  idLokasi: String(ctxAny.idLokasi || ctxAny.id_lokasi || ''),
+                  kodeInstansi: String(ctxAny.kodeInstansi || ctxAny.kode_instansi || ''),
+                  kodeUnor: String(ctxAny.kodeUnor || ctxAny.kode_unor || ctxAny.unor || ''),
+                  workMode: String(ctxAny.workMode || ctxAny.work_mode || '1'),
+                  versi: String(ctxAny.versi || '2.0.0'),
                 },
-                pegawai: activePegawaiAny,
-              } : {
-                config: { deviceId: String(cred?.imei || ''), workMode: '1', versi: '2.0.0' },
-                pegawai: { nip: uname, imei: String(cred?.imei || ''), deviceId: String(cred?.imei || '') },
-              })
+                pegawai: (ctxAny && Object.keys(ctxAny).length > 0) ? ctxAny : { nip: uname, imei: String(cred?.imei || ''), deviceId: String(cred?.imei || '') },
+              }
             : undefined;
 
           profilesPayload[key] = {

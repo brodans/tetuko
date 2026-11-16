@@ -12,6 +12,7 @@ import { ambilImei, login as webLogin, logout as webLogout, muatCaptcha, selesai
 import { loadServerCreds, loadAllServerCreds, saveServerCreds, deleteServerCreds, setActiveServerCred, type SavedServerCreds } from '../lib/loginCredsStore';
 import { loadAppAuthSession } from '../lib/appAuthSession';
 import { isProfileAllowed } from '../lib/appUserManager';
+import { saveNativeSessionContext } from '../lib/nativeSessionContextStore';
 import AppAccountManagementModal from './AppAccountManagementModal';
 
 type SavedCreds = SavedServerCreds;
@@ -228,6 +229,7 @@ export default function ServerHub({ isDarkMode, toggleDarkMode, onAppLogout }: P
           await saveServerCreds(pId, toSave, accountKey);
         }
         await refreshSavedForProfile(pId);
+        try { await saveNativeSessionContext(pId, creds.nip.trim(), hasil.profile as any); } catch {}
         loginAs(hasil.profile as any, pId as ServerProfileId, creds.nip.trim());
         return true;
       }

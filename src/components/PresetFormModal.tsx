@@ -230,9 +230,27 @@ export default function PresetFormModal({
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
             <Input placeholder="Cari nama/kode lokasi..." value={cariLokasi} onChange={e => setCariLokasi(e.target.value)} className="pl-9 text-sm" />
           </div>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] text-slate-500 dark:text-slate-400">{form.lokasiIds.length > 0 ? `${form.lokasiIds.length} lokasi dipilih` : 'Belum ada lokasi dipilih'}</span>
-            {form.lokasiIds.length > 0 && <button type="button" onClick={() => set('lokasiIds', [])} className="text-[11px] text-rose-500 hover:text-rose-600 font-medium">Hapus semua</button>}
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400">
+              {form.lokasiIds.length > 0 ? `${form.lokasiIds.length} lokasi dipilih` : 'Belum ada lokasi dipilih'}
+            </span>
+            <div className="flex items-center gap-2">
+              {lokasiFiltrat.length > 0 && form.lokasiIds.length < MAKS_LOKASI && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const ids = lokasiFiltrat.map(l => l.id).slice(0, MAKS_LOKASI);
+                    set('lokasiIds', ids);
+                  }}
+                  className="text-[11px] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
+                >
+                  Pilih semua
+                </button>
+              )}
+              {form.lokasiIds.length > 0 && (
+                <button type="button" onClick={() => set('lokasiIds', [])} className="text-[11px] text-rose-500 hover:text-rose-600 font-medium">Hapus semua</button>
+              )}
+            </div>
           </div>
           <div className="max-h-44 overflow-y-auto custom-scrollbar rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700/60">
             {lokasiFiltrat.length === 0 ? (
