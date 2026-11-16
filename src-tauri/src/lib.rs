@@ -10,9 +10,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{net::SocketAddr, sync::Arc};
 use tauri::{
-    menu::{Menu, MenuItem},
+    menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, WindowEvent,
+    Emitter, Manager, WindowEvent,
 };
 use tauri_plugin_autostart::ManagerExt;
 mod automation;
@@ -1125,33 +1125,141 @@ async fn start_local_server() {
     }
 }
 
-fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
-    let show_i = MenuItem::with_id(app, "show", "Tampilkan TETUKO", true, None::<&str>)?;
+fn show_main_window(app: &tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+        let _ = w.set_skip_taskbar(false);
+    }
+}
+
+fn hide_main_window(app: &tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        // Sembunyikan ke tray agar proses automasi/notifikasi tetap berjalan di background (service Rust tetap aktif)
+        let _ = w.hide();
+        let _ = w.set_skip_taskbar(true);
+    }
+}
+
+fn emit_tray_navigate(app: &tauri::AppHandle, target: &str) {
+    show_main_window(app);
+    let _ = app.emit(
+        "tetuko://tray-navigate",
+        serde_json::json!({ "target": target }),
+    );
+}
+
+fn build_tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
+    let show_i = MenuItem::with_id(app, "show", "Buka TETUKO", true, None::<&str>)?;
     let hide_i = MenuItem::with_id(app, "hide", "Sembunyikan ke Tray", true, None::<&str>)?;
-    let quit_i = MenuItem::with_id(app, "quit", "Keluar", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&show_i, &hide_i, &quit_i])?;
+    let sep1 = PredefinedMenuItem::separator(app)?;
+
+    let absen_jatim = MenuItem::with_id(app, "nav:absen:jatim", "Absen Jatim", true, None::<&str>)?;
+    let absen_madiun =
+        MenuItem::with_id(app, "nav:absen:madiun", "Absen Madiun", true, None::<&str>)?;
+    let absen_ponorogo = MenuItem::with_id(
+        app,
+        "nav:absen:ponorogo",
+        "Absen Ponorogo",
+        true,
+        None::<&str>,
+    )?;
+    let presensi_harian_ponorogo = MenuItem::with_id(
+        app,
+        "nav:ponorogo:presensi-harian",
+        "Presensi Harian Ponorogo",
+        true,
+        None::<&str>,
+    )?;
+    let database_ponorogo = MenuItem::with_id(
+        app,
+        "nav:ponorogo:database",
+        "Database Ponorogo",
+        true,
+        None::<&str>,
+    )?;
+    let submenu_quick = Submenu::with_items(
+        app,
+        "Aksi Cepat",
+        true,
+        &[
+            &absen_jatim,
+            &absen_madiun,
+            &absen_ponorogo,
+            &presensi_harian_ponorogo,
+            &database_ponorogo,
+        ],
+    )?;
+
+    let sep2 = PredefinedMenuItem::separator(app)?;
+    let autostart_enabled = app.autolaunch().is_enabled().unwrap_or(false);
+    let autostart_i = CheckMenuItem::with_id(
+        app,
+        "toggle-autostart",
+        "Mulai Saat Startup (Auto-start)",
+        true,
+        autostart_enabled,
+        None::<&str>,
+    )?;
+    let sep3 = PredefinedMenuItem::separator(app)?;
+    let quit_i = MenuItem::with_id(app, "quit", "Keluar TETUKO", true, None::<&str>)?;
+
+    Menu::with_items(
+        app,
+        &[
+            &show_i,
+            &hide_i,
+            &sep1,
+            &submenu_quick,
+            &sep2,
+            &autostart_i,
+            &sep3,
+            &quit_i,
+        ],
+    )
+}
+
+fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
+    let menu = build_tray_menu(app.handle())?;
 
     let mut builder = TrayIconBuilder::with_id("main-tray")
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .tooltip("TETUKO - Presensi & Automasi")
-        .on_menu_event(|app, event| match event.id.as_ref() {
-            "show" => {
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.show();
-                    let _ = w.unminimize();
-                    let _ = w.set_focus();
+        .tooltip("TETUKO - Presensi & Automasi (aktif di tray)")
+        .on_menu_event(|app, event| {
+            let id = event.id.as_ref().to_string();
+            match id.as_str() {
+                "show" => show_main_window(app),
+                "hide" => hide_main_window(app),
+                "quit" => app.exit(0),
+                "toggle-autostart" => {
+                    let autostart = app.autolaunch();
+                    let enabled = autostart.is_enabled().unwrap_or(false);
+                    if enabled {
+                        let _ = autostart.disable();
+                    } else {
+                        let _ = autostart.enable();
+                    }
+                    if let Ok(new_menu) = build_tray_menu(app) {
+                        if let Some(tray) = app.tray_by_id("main-tray") {
+                            let _ = tray.set_menu(Some(new_menu));
+                        }
+                    }
+                    let _ = app.emit(
+                        "tetuko://autostart-changed",
+                        serde_json::json!({ "enabled": !enabled }),
+                    );
                 }
-            }
-            "hide" => {
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.hide();
+                "nav:absen:jatim" => emit_tray_navigate(app, "absen:jatim"),
+                "nav:absen:madiun" => emit_tray_navigate(app, "absen:madiun"),
+                "nav:absen:ponorogo" => emit_tray_navigate(app, "absen:ponorogo"),
+                "nav:ponorogo:presensi-harian" => {
+                    emit_tray_navigate(app, "ponorogo:presensi-harian")
                 }
+                "nav:ponorogo:database" => emit_tray_navigate(app, "ponorogo:database"),
+                _ => {}
             }
-            "quit" => {
-                app.exit(0);
-            }
-            _ => {}
         })
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
@@ -1164,11 +1272,9 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
                 if let Some(w) = app.get_webview_window("main") {
                     let visible = w.is_visible().unwrap_or(false);
                     if visible {
-                        let _ = w.hide();
+                        hide_main_window(app);
                     } else {
-                        let _ = w.show();
-                        let _ = w.unminimize();
-                        let _ = w.set_focus();
+                        show_main_window(app);
                     }
                 }
             }
@@ -1180,6 +1286,31 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
 
     let _tray = builder.build(app)?;
     Ok(())
+}
+
+#[tauri::command]
+fn get_autostart_enabled(app: tauri::AppHandle) -> Result<bool, String> {
+    Ok(app.autolaunch().is_enabled().unwrap_or(false))
+}
+
+#[tauri::command]
+fn set_autostart_enabled(app: tauri::AppHandle, enabled: bool) -> Result<bool, String> {
+    let autostart = app.autolaunch();
+    if enabled {
+        autostart.enable().map_err(|e| e.to_string())?;
+    } else {
+        autostart.disable().map_err(|e| e.to_string())?;
+    }
+    if let Ok(new_menu) = build_tray_menu(&app) {
+        if let Some(tray) = app.tray_by_id("main-tray") {
+            let _ = tray.set_menu(Some(new_menu));
+        }
+    }
+    let _ = app.emit(
+        "tetuko://autostart-changed",
+        serde_json::json!({ "enabled": enabled }),
+    );
+    Ok(enabled)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -1198,7 +1329,9 @@ pub fn run() {
             absensi_image_proxy,
             automation::automation_sync,
             automation::automation_get_state,
-            automation::automation_set_scheduler
+            automation::automation_set_scheduler,
+            get_autostart_enabled,
+            set_autostart_enabled
         ])
         .setup(|app| {
             let mgr = Arc::new(automation::AutomationManager::new(&app.handle()));
@@ -1208,25 +1341,15 @@ pub fn run() {
                 start_local_server().await;
             });
 
-            // System tray + background mode (tutup jendela => sembunyi ke tray, proses tetap aktif)
+            // System tray + background mode (tutup jendela => sembunyi ke tray, proses automasi tetap aktif di Rust)
             if let Err(e) = setup_tray(app) {
                 eprintln!("[TETUKO] Gagal membuat system tray: {}", e);
             }
 
-            // Aktifkan autostart agar automasi/notifikasi dapat berjalan sejak startup sistem (best effort)
-            {
-                let autostart = app.autolaunch();
-                if !autostart.is_enabled().unwrap_or(false) {
-                    let _ = autostart.enable();
-                }
-            }
-
-            // Jika dijalankan dengan argumen --minimized (autostart), sembunyikan jendela utama
+            // Jika dijalankan dengan argumen --minimized (autostart), sembunyikan jendela utama ke tray
             let minimized = std::env::args().any(|a| a == "--minimized");
             if minimized {
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.hide();
-                }
+                hide_main_window(app.handle());
             }
 
             Ok(())
@@ -1234,7 +1357,8 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 // Biarkan aplikasi tetap berjalan di background/tray untuk automasi & notifikasi
-                let _ = window.hide();
+                let app = window.app_handle();
+                hide_main_window(app);
                 api.prevent_close();
             }
         })

@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Server, LogIn, User, Lock, Eye, EyeOff, Moon, Sun, ArrowLeft, ShieldCheck, RefreshCw, Loader2, KeyRound, CheckCircle2, Settings, LogOut, Zap } from 'lucide-react';
 import ServerHubPresetManager from './ServerHubPresetManager';
 import { AUTOMATION_AVAILABLE } from '../lib/deployMode';
+import { isTauriRuntime } from '../lib/nativeAutomation';
+import { getAutostartEnabled, setAutostartEnabled, listenAutostartChanged } from '../lib/nativeTray';
 import { useAppContext } from '../context/AppContext';
 import { SERVER_PROFILES, type ServerProfileId } from '../lib/serverProfiles';
 import { loginServerPusat, tandaiAktifServer, imeiStabil, simpanImei } from '../lib/serverAutoLogin';
@@ -35,6 +37,9 @@ export default function ServerHub({ isDarkMode, toggleDarkMode, onAppLogout }: P
   const [savedMap, setSavedMap] = useState<Record<string, SavedCreds | null>>({});
   const [showManage, setShowManage] = useState(false);
   const [hubTab, setHubTab] = useState<'server' | 'preset'>('server');
+  const [autostartOn, setAutostartOn] = useState(false);
+  const [autostartBusy, setAutostartBusy] = useState(false);
+  const isTauri = isTauriRuntime();
   const appSession = useMemo(() => loadAppAuthSession(), [showManage]);
   const isAppAdmin = appSession?.role === 'admin';
   const accountKey = (appSession?.user?.username || (isAppAdmin ? 'admin' : 'user')).toLowerCase();
@@ -56,6 +61,30 @@ export default function ServerHub({ isDarkMode, toggleDarkMode, onAppLogout }: P
   const captchaBlobRef = useRef<Blob | null>(null);
 
   const profile = useMemo(() => SERVER_PROFILES.find(p => p.id === selected) || null, [selected]);
+
+  useEffect(() => {
+    if (!isTauri) return;
+    let un: (() => void) | null = null;
+    (async () => {
+      try { setAutostartOn(await getAutostartEnabled()); } catch {}
+      try { un = await listenAutostartChanged((v) => setAutostartOn(v)); } catch {}
+    })();
+    return () => { try { un?.(); } catch {} };
+  }, [isTauri]);
+
+  const toggleAutostart = async () => {
+    if (!isTauri || autostartBusy) return;
+    setAutostartBusy(true);
+    try {
+      const next = !autostartOn;
+      await setAutostartEnabled(next);
+      setAutostartOn(next);
+    } catch (e) {
+      console.warn('Gagal mengubah autostart', e);
+    } finally {
+      setAutostartBusy(false);
+    }
+  };
 
   const resetRecovery = useCallback(() => {
     setRecoveryOpen(false);
@@ -221,6 +250,30 @@ export default function ServerHub({ isDarkMode, toggleDarkMode, onAppLogout }: P
 
   // Tidak auto-login saat memilih server; pengguna menekan tombol Masuk secara manual.
 
+  // Permintaan navigasi cepat dari tray (pilih server / langsung coba masuk jika kredensial tersimpan)
+  useEffect(() => {
+    const handler = async (ev: Event) => {
+      const detail = (ev as CustomEvent<any>).detail || {};
+      const profileId = detail.profileId as ServerProfileId | undefined;
+      const autoLogin = detail.autoLogin !== false;
+      if (!profileId) return;
+      if (!visibleProfiles.some(p => p.id === profileId)) return;
+      setError(null);
+      setHubTab('server');
+      const saved = savedMap[profileId] ?? await loadServerCreds(profileId, accountKey);
+      setSavedMap(prev => ({ ...prev, [profileId]: saved }));
+      setSelected(profileId);
+      if (autoLogin && saved?.nip && saved?.password) {
+        setNeedsCreds(true);
+        void doLogin(profileId, { nip: saved.nip, password: saved.password, imei: saved.imei }, { showErrors: true, connectingUi: true, allowRecovery: true });
+      } else {
+        setNeedsCreds(true);
+      }
+    };
+    window.addEventListener('tetuko-tray-open-profile', handler as any);
+    return () => window.removeEventListener('tetuko-tray-open-profile', handler as any);
+  }, [accountKey, doLogin, savedMap, visibleProfiles]);
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selected) return;
@@ -294,7 +347,22 @@ export default function ServerHub({ isDarkMode, toggleDarkMode, onAppLogout }: P
               <p className="mt-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400">Masuk ke server presensi Anda.</p>
               {appSession && <p className="mt-1 text-[11px] font-semibold text-slate-600 dark:text-slate-300">Sesi: <span className="text-blue-600 dark:text-blue-400">@{appSession.user?.username || 'admin'}</span> <span className="uppercase text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 ml-1">{appSession.role}</span></p>}
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
+              {isTauri && (
+                <button
+                  type="button"
+                  onClick={() => void toggleAutostart()}
+                  disabled={autostartBusy}
+                  className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${autostartOn ? 'border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'} disabled:opacity-60`}
+                  title="Jalankan TETUKO otomatis saat komputer menyala"
+                >
+                  <span className={`inline-flex h-4 w-4 items-center justify-center rounded border ${autostartOn ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300 dark:border-slate-600 bg-transparent'}`}>
+                    {autostartOn && <CheckCircle2 className="w-3 h-3" />}
+                  </span>
+                  <span className="hidden lg:inline">Mulai Saat Startup</span>
+                  <span className="lg:hidden">Startup</span>
+                </button>
+              )}
               {isAppAdmin && (
                 <button type="button" onClick={() => setShowManage(true)} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700" title="Manajemen Akun & Konfigurasi">
                   <Settings className="w-4 h-4" /> <span className="hidden sm:inline">Manajemen</span>

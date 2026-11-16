@@ -17,6 +17,9 @@ import AppLoginScreen from './components/AppLoginScreen';
 import ProfilServerAkunModal from './components/ProfilServerAkunModal';
 import PonorogoUbahPasswordModal from './components/PonorogoUbahPasswordModal';
 import PageSkeleton from './components/ui/PageSkeleton';
+import { isTauriRuntime } from './lib/nativeAutomation';
+import { listenTrayNavigate, type TrayNavigateTarget } from './lib/nativeTray';
+import type { ServerProfileId } from './lib/serverProfiles';
 import { apiUrl } from './lib/apiBase';
 import { AUTOMATION_AVAILABLE } from './lib/deployMode';
 import { navigateTo, pageToPath, pathToRoute, slugToPageId, defaultPageForProfile } from './lib/routes';
@@ -26,6 +29,21 @@ import { loadAppAuthSession, clearAppAuthSession, touchAppAuthSession } from './
 import { isMenuAllowed, isProfileAllowed } from './lib/appUserManager';
 
 type PageModule = { default: React.ComponentType };
+
+function trayTargetToProfile(target: TrayNavigateTarget): ServerProfileId {
+  if (target === 'absen:jatim') return 'jatim';
+  if (target === 'absen:madiun') return 'madiun';
+  return 'ponorogo';
+}
+function trayTargetToPageId(target: TrayNavigateTarget, profileId: ServerProfileId): string {
+  if (profileId === 'ponorogo') {
+    if (target === 'ponorogo:database') return 'tabDatabase';
+    if (target === 'ponorogo:presensi-harian') return 'tabLog';
+    return 'tabAbsen';
+  }
+  return 'tabPresensi';
+}
+const PENDING_TRAY_TARGET_KEY = 'tetuko_pending_tray_target';
 const pageImporters = {
   tabBeranda: () => import('./pages/Beranda'),
   tabPresensi: () => import('./pages/Presensi'),
@@ -371,6 +389,18 @@ function PonorogoShell({ onLogout, isDarkMode, toggleDarkMode, devInspectorOpen,
     await Promise.resolve(onLogout());
   };
 
+  useEffect(() => {
+    const handler = (ev: Event) => {
+      const detail = (ev as CustomEvent<any>).detail || {};
+      if (detail.profileId && detail.profileId !== 'ponorogo') return;
+      const pid = String(detail.pageId || '');
+      if (!pid) return;
+      if (allowedPonorogoPages.some(p => p.id === pid)) setActivePage(pid);
+    };
+    window.addEventListener('tetuko-tray-open-page', handler as any);
+    return () => window.removeEventListener('tetuko-tray-open-page', handler as any);
+  }, [allowedPonorogoPages, setActivePage]);
+
   const displayName = (pegawai as any)?.nama || (pegawai as any)?.nip || 'Pengguna';
   const nip = (pegawai as any)?.nip || '';
   const rawPhoto = (pegawai as any)?.profilePic || (pegawai as any)?.foto || '';
@@ -452,7 +482,7 @@ function PonorogoApp({ onLogout, devInspectorOpen, onToggleInspector, routePageS
 }
 
 function AppRouter({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDarkMode: () => void }) {
-  const { pegawai, serverProfile, logout, loginForm } = useAppContext();
+  const { pegawai, serverProfile, logout, loginForm, setActivePage: setBkdActivePage } = useAppContext();
   const [devInspectorOpen, setDevInspectorOpen] = useState(false);
   const [appAuthed, setAppAuthed] = useState<boolean>(() => !!loadAppAuthSession());
   const [routeSlug, setRouteSlug] = useState<string | null>(() => {
@@ -495,6 +525,67 @@ function AppRouter({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggle
     const iv = setInterval(check, 15000);
     return () => { events.forEach(e => window.removeEventListener(e, touch)); clearInterval(iv); };
   }, [appAuthed]);
+
+  // Navigasi cepat dari system tray (native)
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    let unlisten: (() => void) | null = null;
+    (async () => {
+      try {
+        unlisten = await listenTrayNavigate((target) => {
+          const targetProfile = trayTargetToProfile(target);
+          const targetPage = trayTargetToPageId(target, targetProfile);
+          const currentSession = loadAppAuthSession();
+          if (!currentSession) {
+            try { sessionStorage.setItem(PENDING_TRAY_TARGET_KEY, JSON.stringify({ target, targetProfile, targetPage })); } catch {}
+            navigateTo('/masuk', true);
+            return;
+          }
+          // Belum login server / sesi server tidak cocok -> buka ServerHub dan pilih profil target
+          if (!pegawai || serverProfile.id !== targetProfile) {
+            try { sessionStorage.setItem(PENDING_TRAY_TARGET_KEY, JSON.stringify({ target, targetProfile, targetPage })); } catch {}
+            // jika sedang di server lain, kembali ke hub agar bisa login profil target
+            try { logout(); } catch {}
+            navigateTo('/login', true);
+            setTimeout(() => {
+              try { window.dispatchEvent(new CustomEvent('tetuko-tray-open-profile', { detail: { profileId: targetProfile, autoLogin: true } })); } catch {}
+            }, 50);
+            return;
+          }
+          // Sesi aktif & profil cocok -> langsung ke menu tujuan
+          if (serverProfile.mode === 'ponorogo-absensi') {
+            try { window.dispatchEvent(new CustomEvent('tetuko-tray-open-page', { detail: { profileId: targetProfile, pageId: targetPage } })); } catch {}
+          } else {
+            setBkdActivePage(targetPage);
+          }
+        });
+      } catch (e) {
+        console.warn('[tray] listener gagal', e);
+      }
+    })();
+    return () => { try { unlisten?.(); } catch {} };
+  }, [pegawai, serverProfile.id, serverProfile.mode, logout, setBkdActivePage]);
+
+  // Setelah login server sukses dari tray, buka menu tujuan bila masih sesuai profil
+  useEffect(() => {
+    if (!pegawai) return;
+    let pending: any = null;
+    try {
+      const raw = sessionStorage.getItem(PENDING_TRAY_TARGET_KEY);
+      pending = raw ? JSON.parse(raw) : null;
+    } catch {}
+    if (!pending) return;
+    if (pending.targetProfile !== serverProfile.id) return;
+    try { sessionStorage.removeItem(PENDING_TRAY_TARGET_KEY); } catch {}
+    const pageId = pending.targetPage || trayTargetToPageId(pending.target as TrayNavigateTarget, serverProfile.id as ServerProfileId);
+    if (serverProfile.mode === 'ponorogo-absensi') {
+      setTimeout(() => {
+        try { window.dispatchEvent(new CustomEvent('tetuko-tray-open-page', { detail: { profileId: serverProfile.id, pageId } })); } catch {}
+      }, 0);
+    } else {
+      setBkdActivePage(pageId);
+    }
+  }, [pegawai, serverProfile.id, serverProfile.mode, setBkdActivePage]);
 
   // routing guard: /masuk <-> /login <-> /<profile>/*
   useEffect(() => {
