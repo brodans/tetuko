@@ -413,15 +413,27 @@ export function notifyPresetUpdated(): void {
 }
 
 export function notifySchedulerToggle(aktif: boolean): void {
-  window.dispatchEvent(new CustomEvent('presensi-scheduler-toggle', { detail: { aktif } }));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('presensi-scheduler-toggle', { detail: aktif }));
+  }
 }
 
 // ─── Persistensi toggle penjadwal ─────────────────────────────────────────────
-const KEY_PENJADWAL = 'automasi_penjadwal_aktif';
+// Gunakan kunci unified yang sama dengan GlobalPresetScheduler agar status penjadwal konsisten (Jatim/Madiun/Ponorogo, unified & legacy)
+const KEY_PENJADWAL = 'presensi_penjadwal_otomatis_aktif';
+const LEGACY_KEY_PENJADWAL = 'automasi_penjadwal_aktif';
 
 export function getPenjadwalAktif(): boolean {
   try {
-    return appStorage.getItem(KEY_PENJADWAL) === 'true';
+    const v = appStorage.getItem(KEY_PENJADWAL);
+    if (v === 'true' || v === 'false') return v === 'true';
+    const legacy = appStorage.getItem(LEGACY_KEY_PENJADWAL);
+    if (legacy === 'true' || legacy === 'false') {
+      // migrasi ke kunci unified (default lama: false)
+      appStorage.setItem(KEY_PENJADWAL, legacy);
+      return legacy === 'true';
+    }
+    return false;
   } catch {
     return false;
   }
@@ -429,7 +441,9 @@ export function getPenjadwalAktif(): boolean {
 
 export function setPenjadwalAktif(aktif: boolean): void {
   try {
-    appStorage.setItem(KEY_PENJADWAL, aktif ? 'true' : 'false');
+    const val = aktif ? 'true' : 'false';
+    appStorage.setItem(KEY_PENJADWAL, val);
+    appStorage.setItem(LEGACY_KEY_PENJADWAL, val);
   } catch {
     // ignore
   }

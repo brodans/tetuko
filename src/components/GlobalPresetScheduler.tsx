@@ -79,8 +79,10 @@ function GlobalPresetSchedulerInner() {
   // Dengarkan event pembaruan dari halaman PresetOtomatisasi
   useEffect(() => {
     const handleToggle = (e: Event) => {
-      const customEvent = e as CustomEvent<boolean>;
-      setPenjadwalAktif(customEvent.detail);
+      const customEvent = e as CustomEvent<any>;
+      const d = customEvent.detail;
+      const next = typeof d === 'boolean' ? d : (d && typeof d.aktif === 'boolean' ? d.aktif : null);
+      if (typeof next === 'boolean') setPenjadwalAktif(next);
     };
 
     const handleUpdated = () => {

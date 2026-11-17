@@ -656,11 +656,14 @@ function AppRouter({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggle
 
   if (!pegawai) {
     return (
-      <ServerHub
-        isDarkMode={isDarkMode}
-        toggleDarkMode={toggleDarkMode}
-        onAppLogout={handleAppLogout}
-      />
+      <>
+        {AUTOMATION_AVAILABLE && isTauriRuntime() ? <GlobalPresetScheduler /> : null}
+        <ServerHub
+          isDarkMode={isDarkMode}
+          toggleDarkMode={toggleDarkMode}
+          onAppLogout={handleAppLogout}
+        />
+      </>
     );
   }
 
@@ -670,7 +673,12 @@ function AppRouter({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggle
     // logout sesi presensi profil terlarang dan kembali ke pilihan server
     try { logout(); } catch {}
     navigateTo('/login', true);
-    return <ServerHub isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} onAppLogout={handleAppLogout} />;
+    return (
+      <>
+        {AUTOMATION_AVAILABLE && isTauriRuntime() ? <GlobalPresetScheduler /> : null}
+        <ServerHub isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} onAppLogout={handleAppLogout} />
+      </>
+    );
   }
 
   if (serverProfile.mode === 'ponorogo-absensi') {
