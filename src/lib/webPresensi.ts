@@ -3,7 +3,7 @@
  * Adapted for unified app (profile-aware EP base via header/cookie handled by proxy).
  */
 
-import { apiUrl, ensureTauriApiBase, getTauriApiBase, rebaseTauriApiUrlToCurrent } from './apiBase';
+import { apiUrl, ensureTauriApiBase, getTauriApiBase, rebaseTauriApiUrlToCurrent, tauriResilientFetch } from './apiBase';
 
 const PROXY = '/ep';
 function epUrl(pathAfterEp: string) {
@@ -239,21 +239,28 @@ export async function selesaikanCaptcha(blob: Blob): Promise<OcrResult> {
   // Panggil endpoint OCR lokal:
   // - Tauri: dilayani native Rust (ONNX built-in, tanpa python/ketergantungan eksternal)
   // - Dev: dilayani dev-server (ocr_service.py) bila tersedia
-  let res: Response;
   try {
-    res = await fetch(apiUrl('/api/ocr'), {
-      method: 'POST',
-      body: blob,
-      headers: { 'Content-Type': 'application/octet-stream' },
-    });
+    const target = apiUrl('/api/ocr');
+    const res = tauriRuntime
+      ? await tauriResilientFetch(target, {
+          method: 'POST',
+          body: blob,
+          headers: { 'Content-Type': 'application/octet-stream' },
+        })
+      : await fetch(target, {
+          method: 'POST',
+          body: blob,
+          headers: { 'Content-Type': 'application/octet-stream' },
+        });
+
+    const data = await res.json().catch(() => ({})) as { ok?: boolean; text?: string; kandidat?: string[]; yakin?: boolean; error?: string };
+    if (!res.ok || !data.ok) {
+      return { teks: '', kandidat: [], yakin: false };
+    }
+    return { teks: data.text || '', kandidat: data.kandidat || [], yakin: !!data.yakin };
   } catch {
     return { teks: '', kandidat: [], yakin: false };
   }
-  const data = await res.json().catch(() => ({})) as { ok?: boolean; text?: string; kandidat?: string[]; yakin?: boolean; error?: string };
-  if (!res.ok || !data.ok) {
-    return { teks: '', kandidat: [], yakin: false };
-  }
-  return { teks: data.text || '', kandidat: data.kandidat || [], yakin: !!data.yakin };
 }
 
 export async function login({ nip, password, captcha }: { nip: string; password: string; captcha: string }): Promise<boolean> {

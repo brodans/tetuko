@@ -1149,6 +1149,11 @@ fn build_router(state: Arc<AppState>) -> Router {
 }
 
 async fn start_local_server() {
+    // Warmup OCR ONNX native di background agar captcha pertama cepat & load awal tetap optimal
+    tauri::async_runtime::spawn_blocking(|| {
+        captcha_ocr::warmup();
+    });
+
     let client = match reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .build()

@@ -31,10 +31,20 @@ struct OcrEngine {
 static ENGINE: OnceLock<Result<OcrEngine, String>> = OnceLock::new();
 
 fn get_engine() -> Result<&'static OcrEngine, String> {
-    match ENGINE.get_or_init(init_engine) {
+    match ENGINE.get_or_init(|| match init_engine() {
+        Ok(e) => Ok(e),
+        Err(e) => {
+            eprintln!("[OCR] Gagal inisialisasi engine ONNX native: {}", e);
+            Err(e)
+        }
+    }) {
         Ok(e) => Ok(e),
         Err(e) => Err(e.clone()),
     }
+}
+
+pub fn warmup() {
+    let _ = get_engine();
 }
 
 fn init_engine() -> Result<OcrEngine, String> {
