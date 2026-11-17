@@ -21,8 +21,8 @@ import { useToast } from '../components/ui/Toast';
 import { saveBlobSmart } from '../lib/nativeSave';
 
 const MAX_PERCOBAAN_OCR = 3;
-// OCR otomatis hanya untuk dev/Tauri lokal; di Vercel selalu manual (captcha tetap dimuat).
-const OCR_LOKAL = import.meta.env.DEV && !IS_VERCEL_DEPLOY;
+// OCR otomatis untuk dev lokal & Tauri native (proxy /api/ocr + python ONNX); di Vercel selalu manual.
+const OCR_LOKAL = (import.meta.env.DEV || (typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window))) && !IS_VERCEL_DEPLOY;
 
 function sesiKey(profileId: string) { return `portal:web-presensi-session:${profileId}`; }
 

@@ -35,7 +35,7 @@ _lock = threading.Lock()
 
 
 def muat_model():
-    """Muat ddddocr sekali saja (lazy)."""
+    """Muat model OCR ONNX (ddddocr/onnxruntime) sekali saja (lazy)."""
     global _engine, _wrapper, _charset, _digit_idx
     if _engine is not None:
         return _engine
@@ -46,7 +46,7 @@ def muat_model():
             import ddddocr  # noqa: PLC0415
         except Exception as exc:  # pragma: no cover - jalur kegagalan
             raise SystemExit(
-                "ddddocr tidak terpasang. Jalankan: pip install ddddocr\n"
+                "Dependensi OCR ONNX tidak tersedia. Jalankan: pip install ddddocr onnxruntime\n"
                 f"Detail: {exc}"
             ) from exc
 
@@ -147,7 +147,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split("?")[0] in ("/health", "/"):
             try:
                 muat_model()
-                self._kirim(200, {"ok": True, "engine": "ddddocr", "panjang": PANJANG_CAPTCHA})
+                self._kirim(200, {"ok": True, "engine": "onnx-ddddocr", "panjang": PANJANG_CAPTCHA})
             except SystemExit as exc:
                 self._kirim(503, {"ok": False, "error": str(exc)})
         else:
@@ -189,7 +189,7 @@ def main() -> int:
 
     srv = ThreadingHTTPServer((args.host, args.port), Handler)
     srv.daemon_threads = True
-    print(f"[ocr] ddddocr siap di http://{args.host}:{args.port}", flush=True)
+    print(f"[ocr] onnx/ddddocr siap di http://{args.host}:{args.port}", flush=True)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
