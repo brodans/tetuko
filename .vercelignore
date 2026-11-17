@@ -13,4 +13,15 @@ tmp/
 ocr_service.py
 README.md
 data/*.json
+
+# ONNX OCR hanya untuk native Rust Tauri (bukan untuk Vercel/web deploy)
+public/ocr_model.onnx
+public/ort/
+ocr_model.onnx
+src-tauri/ocr_model.onnx
+src-tauri/ocr_charset.json
+src/lib/ocrCharset.json
+src/lib/captchaOcr.ts
+src/lib/onnxruntime-web-wasm.d.ts
+
 # keep source and public assets needed for web build

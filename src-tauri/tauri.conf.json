@@ -33,6 +33,6 @@
         "bundleMediaFramework": false
       }
     },
-    "resources": ["../ocr_service.py"]
+    "resources": []
   }
 }

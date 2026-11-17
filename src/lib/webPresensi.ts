@@ -228,31 +228,17 @@ export async function muatCaptcha(): Promise<CaptchaResult> {
 }
 
 export async function selesaikanCaptcha(blob: Blob): Promise<OcrResult> {
-  // 1) Coba OCR ONNX built-in (lokal, tanpa python/ketergantungan eksternal) - prioritas Tauri/offline
-  try {
-    const { selesaikanCaptchaLokal } = await import('./captchaOcr');
-    const lokal = await selesaikanCaptchaLokal(blob);
-    if (lokal && lokal.teks) {
-      // jika cukup yakin atau dapat 4 digit, gunakan langsung
-      if (lokal.yakin || (lokal.teks.length === 4 && /^\d+$/.test(lokal.teks))) {
-        return lokal;
-      }
-      // simpan sebagai kandidat fallback, tapi coba endpoint /api/ocr juga bila tersedia
-      try {
-        const viaApi = await selesaikanCaptchaViaApi(blob);
-        if (viaApi && viaApi.teks) return viaApi;
-      } catch {}
-      return lokal;
-    }
-  } catch {
-    // abaikan, lanjut fallback
+  // OCR otomatis hanya aktif di runtime native Tauri (ONNX built-in Rust) dan dev lokal.
+  // Di deployment Vercel captcha tetap manual.
+  const tauriRuntime = isTauriRuntime();
+  const allowApiOcr = tauriRuntime || (typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV);
+  if (!allowApiOcr) {
+    return { teks: '', kandidat: [], yakin: false };
   }
 
-  // 2) Fallback: endpoint /api/ocr (dev-server proxy / layanan OCR lokal jika ada)
-  return selesaikanCaptchaViaApi(blob);
-}
-
-async function selesaikanCaptchaViaApi(blob: Blob): Promise<OcrResult> {
+  // Panggil endpoint OCR lokal:
+  // - Tauri: dilayani native Rust (ONNX built-in, tanpa python/ketergantungan eksternal)
+  // - Dev: dilayani dev-server (ocr_service.py) bila tersedia
   let res: Response;
   try {
     res = await fetch(apiUrl('/api/ocr'), {

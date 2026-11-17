@@ -16,6 +16,7 @@ use tauri::{
 };
 use tauri_plugin_autostart::ManagerExt;
 mod automation;
+mod captcha_ocr;
 mod firestore_pull;
 use tower_http::cors::{AllowHeaders, AllowOrigin, CorsLayer};
 
@@ -1054,57 +1055,27 @@ async fn absensi_log_proxy_handler(
 //  OCR Captcha (Python ONNX/ddddocr service proxy + auto-start)
 // ═══════════════════════════════════════════════════════════════════════
 
-fn ocr_host() -> String {
-    std::env::var("EPRESENSI_OCR_HOST")
-        .or_else(|_| std::env::var("OCR_HOST"))
-        .unwrap_or_else(|_| "127.0.0.1".to_string())
-}
-fn ocr_port() -> u16 {
-    std::env::var("EPRESENSI_OCR_PORT")
-        .or_else(|_| std::env::var("OCR_PORT"))
-        .ok()
-        .and_then(|v| v.parse::<u16>().ok())
-        .unwrap_or(8791)
-}
-fn ocr_base_url() -> String {
-    format!("http://{}:{}", ocr_host(), ocr_port())
-}
+// ═══════════════════════════════════════════════════════════════════════
+//  OCR Captcha - ONNX built-in native Rust (tanpa python/ketergantungan eksternal)
+// ═══════════════════════════════════════════════════════════════════════
 
-async fn ocr_handler(State(state): State<Arc<AppState>>, req: Request) -> impl IntoResponse {
+async fn ocr_handler(_state: State<Arc<AppState>>, req: Request) -> impl IntoResponse {
     let method = req.method().clone();
     if method == axum::http::Method::GET {
-        let url = format!("{}/health", ocr_base_url());
-        match state
-            .client
-            .get(&url)
-            .timeout(std::time::Duration::from_secs(2))
-            .send()
-            .await
-        {
-            Ok(r) => {
-                let status =
-                    StatusCode::from_u16(r.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
-                let ct = r
-                    .headers()
-                    .get(axum::http::header::CONTENT_TYPE)
-                    .and_then(|v| v.to_str().ok())
-                    .unwrap_or("application/json; charset=utf-8")
-                    .to_string();
-                let body = r.bytes().await.unwrap_or_default();
-                let mut h = HeaderMap::new();
-                if let Ok(v) = HeaderValue::from_str(&ct) {
-                    h.insert(axum::http::header::CONTENT_TYPE, v);
-                }
-                return (status, h, body).into_response();
-            }
-            Err(_) => {
-                return (
-                    StatusCode::SERVICE_UNAVAILABLE,
-                    Json(json!({"ok": false, "error": "OCR service tidak aktif"})),
-                )
-                    .into_response();
-            }
-        }
+        let ready = captcha_ocr::engine_ready();
+        return (
+            if ready {
+                StatusCode::OK
+            } else {
+                StatusCode::SERVICE_UNAVAILABLE
+            },
+            Json(json!({
+                "ok": ready,
+                "engine": "onnx-rust-builtin",
+                "panjang": 4
+            })),
+        )
+            .into_response();
     }
 
     if method != axum::http::Method::POST {
@@ -1133,128 +1104,15 @@ async fn ocr_handler(State(state): State<Arc<AppState>>, req: Request) -> impl I
             .into_response();
     }
 
-    let url = format!("{}/ocr", ocr_base_url());
-    let mut last_err: Option<String> = None;
-    for attempt in 0..3 {
-        if attempt > 0 {
-            tokio::time::sleep(std::time::Duration::from_millis(600)).await;
-        }
-        let resp = state
-            .client
-            .post(&url)
-            .timeout(std::time::Duration::from_secs(20))
-            .header("Content-Type", "application/octet-stream")
-            .body(body.clone())
-            .send()
-            .await;
-        match resp {
-            Ok(r) => {
-                let status =
-                    StatusCode::from_u16(r.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
-                let ct = r
-                    .headers()
-                    .get(axum::http::header::CONTENT_TYPE)
-                    .and_then(|v| v.to_str().ok())
-                    .unwrap_or("application/json; charset=utf-8")
-                    .to_string();
-                let bytes = r.bytes().await.unwrap_or_default();
-                let mut h = HeaderMap::new();
-                if let Ok(v) = HeaderValue::from_str(&ct) {
-                    h.insert(axum::http::header::CONTENT_TYPE, v);
-                }
-                return (status, h, bytes).into_response();
-            }
-            Err(e) => {
-                last_err = Some(e.to_string());
-            }
-        }
+    let bytes = body.to_vec();
+    match tokio::task::spawn_blocking(move || captcha_ocr::solve_captcha(&bytes)).await {
+        Ok(r) => (StatusCode::OK, Json(r)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"ok": false, "error": format!("OCR gagal: {}", e)})),
+        )
+            .into_response(),
     }
-    (StatusCode::BAD_GATEWAY, Json(json!({
-        "ok": false,
-        "error": format!("OCR Python/ONNX tidak tersedia. Pastikan python3 dan dependensi OCR (ddddocr/onnxruntime) terpasang. {}", last_err.unwrap_or_default())
-    }))).into_response()
-}
-
-fn find_ocr_script() -> Option<std::path::PathBuf> {
-    if let Ok(cwd) = std::env::current_dir() {
-        let p = cwd.join("ocr_service.py");
-        if p.exists() {
-            return Some(p);
-        }
-    }
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            for cand in [
-                dir.join("ocr_service.py"),
-                dir.join("resources").join("ocr_service.py"),
-                dir.join("_up_").join("ocr_service.py"),
-                dir.join("../Resources/ocr_service.py"),
-                dir.join("../resources/ocr_service.py"),
-            ] {
-                if cand.exists() {
-                    return Some(cand);
-                }
-            }
-        }
-    }
-    None
-}
-
-fn spawn_ocr_service_background() {
-    std::thread::spawn(|| {
-        let script = match find_ocr_script() {
-            Some(p) => p,
-            None => {
-                eprintln!("[OCR] ocr_service.py tidak ditemukan, OCR otomatis tidak aktif.");
-                return;
-            }
-        };
-        let host = ocr_host();
-        let port = ocr_port().to_string();
-        loop {
-            // jika sudah ada service yang sehat di port, tidak perlu spawn
-            if std::net::TcpStream::connect_timeout(
-                &format!("{}:{}", host, port)
-                    .parse()
-                    .unwrap_or_else(|_| SocketAddr::from(([127, 0, 0, 1], 8791))),
-                std::time::Duration::from_millis(500),
-            )
-            .is_ok()
-            {
-                std::thread::sleep(std::time::Duration::from_secs(5));
-                continue;
-            }
-
-            let mut cmd = std::process::Command::new("python3");
-            cmd.arg(&script)
-                .arg("--warmup")
-                .arg("--host")
-                .arg(&host)
-                .arg("--port")
-                .arg(&port)
-                .stdin(std::process::Stdio::null())
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null());
-            if let Some(dir) = script.parent() {
-                cmd.current_dir(dir);
-            }
-            match cmd.spawn() {
-                Ok(mut child) => {
-                    eprintln!(
-                        "[OCR] Layanan OCR ONNX (python) dimulai: {}",
-                        script.display()
-                    );
-                    let _ = child.wait();
-                }
-                Err(e) => {
-                    eprintln!("[OCR] Gagal menjalankan python3 OCR service: {}. Pastikan python3 & dependensi ONNX (ddddocr/onnxruntime) terpasang.", e);
-                    std::thread::sleep(std::time::Duration::from_secs(30));
-                    continue;
-                }
-            }
-            std::thread::sleep(std::time::Duration::from_secs(3));
-        }
-    });
 }
 
 fn build_router(state: Arc<AppState>) -> Router {
@@ -1291,7 +1149,6 @@ fn build_router(state: Arc<AppState>) -> Router {
 }
 
 async fn start_local_server() {
-    spawn_ocr_service_background();
     let client = match reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .build()
