@@ -228,6 +228,31 @@ export async function muatCaptcha(): Promise<CaptchaResult> {
 }
 
 export async function selesaikanCaptcha(blob: Blob): Promise<OcrResult> {
+  // 1) Coba OCR ONNX built-in (lokal, tanpa python/ketergantungan eksternal) - prioritas Tauri/offline
+  try {
+    const { selesaikanCaptchaLokal } = await import('./captchaOcr');
+    const lokal = await selesaikanCaptchaLokal(blob);
+    if (lokal && lokal.teks) {
+      // jika cukup yakin atau dapat 4 digit, gunakan langsung
+      if (lokal.yakin || (lokal.teks.length === 4 && /^\d+$/.test(lokal.teks))) {
+        return lokal;
+      }
+      // simpan sebagai kandidat fallback, tapi coba endpoint /api/ocr juga bila tersedia
+      try {
+        const viaApi = await selesaikanCaptchaViaApi(blob);
+        if (viaApi && viaApi.teks) return viaApi;
+      } catch {}
+      return lokal;
+    }
+  } catch {
+    // abaikan, lanjut fallback
+  }
+
+  // 2) Fallback: endpoint /api/ocr (dev-server proxy / layanan OCR lokal jika ada)
+  return selesaikanCaptchaViaApi(blob);
+}
+
+async function selesaikanCaptchaViaApi(blob: Blob): Promise<OcrResult> {
   let res: Response;
   try {
     res = await fetch(apiUrl('/api/ocr'), {
