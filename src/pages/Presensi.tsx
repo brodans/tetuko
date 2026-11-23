@@ -1285,15 +1285,30 @@ function withTimeout<T>(promise: Promise<T>, ms: number, timeoutMsg: string): Pr
     setOutput(null);
     
     const targetPegawai = selectedTargetPegawai || pegawai;
+    const pickCoord = (...vals: any[]) => {
+      for (const v of vals) {
+        if (v === null || v === undefined) continue;
+        const s = String(v).trim();
+        if (s !== '' && s !== '0') return s;
+      }
+      return '';
+    };
     const finalIdLokasi = selectedTargetPegawai
-      ? (selectedTargetPegawai.id_lokasi || selectedTargetLocation?.id || '')
+      ? (selectedTargetPegawai.id_lokasi || selectedTargetLocation?.id || config.idLokasi || '')
       : config.idLokasi;
-    const finalLat = selectedTargetPegawai
-      ? (selectedTargetPegawai.latitude || selectedTargetPegawai.lat || selectedTargetLocation?.latitude || '')
-      : config.latitude;
-    const finalLng = selectedTargetPegawai
-      ? (selectedTargetPegawai.longitude || selectedTargetPegawai.long || selectedTargetLocation?.longitude || '')
-      : config.longitude;
+    const lokasiById = finalIdLokasi ? dataLokasi.find((l: any) => String(l?.id || '') === String(finalIdLokasi)) : null;
+    const finalLat = pickCoord(
+      selectedTargetPegawai?.latitude, selectedTargetPegawai?.lat, selectedTargetPegawai?.lattitude,
+      selectedTargetLocation?.latitude, selectedTargetLocation?.lat,
+      lokasiById?.latitude, lokasiById?.lat,
+      config.latitude
+    );
+    const finalLng = pickCoord(
+      selectedTargetPegawai?.longitude, selectedTargetPegawai?.long, selectedTargetPegawai?.lng, selectedTargetPegawai?.lon,
+      selectedTargetLocation?.longitude, selectedTargetLocation?.long, selectedTargetLocation?.lng, selectedTargetLocation?.lon,
+      lokasiById?.longitude, lokasiById?.long, lokasiById?.lng, lokasiById?.lon,
+      config.longitude
+    );
     const targetDeviceId = selectedTargetPegawai
       ? (selectedTargetPegawai.emei || selectedTargetPegawai.imei || selectedTargetPegawai.device_id || selectedTargetPegawai.sim_serial || '')
       : config.deviceId;

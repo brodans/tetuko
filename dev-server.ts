@@ -418,14 +418,71 @@ async function start() {
       if (!['GET', 'HEAD'].includes(req.method)) {
         body = await readRawBody(req);
       }
-      const upstream = await fetch(upstreamUrl, {
+      let upstream = await fetch(upstreamUrl, {
         method: req.method,
         headers,
         body: body && body.length ? body : undefined,
         redirect: 'manual',
       });
+      let buf = Buffer.from(await upstream.arrayBuffer());
+      let respStatus = upstream.status;
+      let respHeaders = upstream.headers;
+
+      // Bypass Cloudflare challenge untuk Ponorogo: retry via direct IP + Host header
+      const isCfChallenge = (status: number, hdrs: Headers, bodyBuf: Buffer) => {
+        const ct = (hdrs.get('content-type') || '').toLowerCase();
+        const cfMit = (hdrs.get('cf-mitigated') || '').toLowerCase();
+        const prefix = bodyBuf.subarray(0, 4096).toString('utf8').toLowerCase();
+        const challenged = status === 403 || status === 503 || cfMit.includes('challenge')
+          || prefix.includes('just a moment') || prefix.includes('__cf_chl') || prefix.includes('cf-chl')
+          || prefix.includes('challenges.cloudflare.com') || prefix.includes('enable javascript and cookies to continue');
+        return challenged && (ct.includes('text/html') || prefix.includes('<!doctype html') || prefix.includes('<html'));
+      };
+      if (isCfChallenge(respStatus, respHeaders, buf)) {
+        let epHost = '';
+        try { epHost = new URL(epBase).hostname.toLowerCase(); } catch {}
+        if (epHost === 'presensi.ponorogo.go.id') {
+          try {
+            const bypass = await new Promise<{ status: number; headers: Record<string, string | string[]>; body: Buffer }>((resolve, reject) => {
+              const u = new URL(`https://103.109.206.102${upstreamPath}`);
+              const opts: https.RequestOptions = {
+                hostname: u.hostname,
+                port: 443,
+                path: u.pathname + u.search,
+                method: req.method,
+                rejectUnauthorized: false,
+                headers: {
+                  ...headers,
+                  Host: 'presensi.ponorogo.go.id',
+                  Origin: 'https://presensi.ponorogo.go.id',
+                  Referer: 'https://presensi.ponorogo.go.id/',
+                },
+              };
+              const r = https.request(opts, (resp2) => {
+                const chunks: Buffer[] = [];
+                resp2.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+                resp2.on('end', () => resolve({ status: resp2.statusCode || 502, headers: resp2.headers as any, body: Buffer.concat(chunks) }));
+              });
+              r.on('error', reject);
+              if (body && body.length) r.write(body);
+              r.end();
+            });
+            const fakeHeaders = new Headers();
+            for (const [k, v] of Object.entries(bypass.headers || {})) {
+              if (Array.isArray(v)) v.forEach((vv) => fakeHeaders.append(k, vv));
+              else if (v != null) fakeHeaders.set(k, String(v));
+            }
+            if (!isCfChallenge(bypass.status, fakeHeaders, bypass.body)) {
+              respStatus = bypass.status;
+              respHeaders = fakeHeaders;
+              buf = bypass.body;
+            }
+          } catch { /* fallback ke respons asli */ }
+        }
+      }
+
       // copy headers with rewrites
-      const getSetCookie = (upstream.headers as any).getSetCookie?.bind(upstream.headers);
+      const getSetCookie = (respHeaders as any).getSetCookie?.bind(respHeaders);
       if (typeof getSetCookie === 'function') {
         const cookies: string[] = getSetCookie() || [];
         for (const c of cookies) {
@@ -438,8 +495,17 @@ async function start() {
             .join(';') + '; Path=/ep';
           res.append('Set-Cookie', filtered);
         }
+      } else {
+        const sc = (respHeaders as any).get?.('set-cookie');
+        if (sc) {
+          const arr = Array.isArray(sc) ? sc : [sc];
+          for (const c of arr) {
+            const filtered = String(c).split(';').filter((p: string) => { const t = p.trim().toLowerCase(); return !t.startsWith('domain=') && !t.startsWith('path='); }).join(';') + '; Path=/ep';
+            res.append('Set-Cookie', filtered);
+          }
+        }
       }
-      upstream.headers.forEach((value, key) => {
+      respHeaders.forEach((value, key) => {
         const lk = key.toLowerCase();
         if (['content-length','connection','transfer-encoding','set-cookie','content-encoding'].includes(lk)) return;
         if (lk === 'location') {
@@ -458,8 +524,7 @@ async function start() {
         }
         res.setHeader(key, value);
       });
-      const buf = Buffer.from(await upstream.arrayBuffer());
-      res.status(upstream.status).send(buf);
+      res.status(respStatus).send(buf);
     } catch (e: any) {
       res.status(502).send(`Proxy error: ${e?.message || e}`);
     }

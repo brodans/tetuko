@@ -336,70 +336,10 @@ fn rewrite_location(loc: &str, ep_base: &str) -> String {
     out
 }
 
-async fn ep_proxy(State(state): State<Arc<AppState>>, req: Request) -> impl IntoResponse {
-    let headers_in = req.headers().clone();
-    let uri = req.uri().clone();
-    let method = req.method().clone();
-    let ep_base = resolve_ep_base(&headers_in, &uri);
-
-    let path_and_query = uri
-        .path_and_query()
-        .map(|x| x.as_str().to_string())
-        .unwrap_or_else(|| "/ep/".to_string());
-
-    let upstream_path = path_and_query
-        .strip_prefix("/ep")
-        .unwrap_or(&path_and_query)
-        .to_string();
-    let mut upstream_path = if upstream_path.is_empty() {
-        "/".to_string()
-    } else {
-        upstream_path
-    };
-    // Normalisasi path: klien memakai /p/... sebagai path aman, upstream memakai /index.php/...
-    if upstream_path.starts_with("/p/") || upstream_path == "/p" {
-        upstream_path = upstream_path.replacen("/p", "/index.php", 1);
-    }
-    let upstream_url = format!("{}{}", ep_base, upstream_path);
-
-    let body_bytes = axum::body::to_bytes(req.into_body(), usize::MAX)
-        .await
-        .unwrap_or_default();
-
-    let method_req =
-        reqwest::Method::from_bytes(method.as_str().as_bytes()).unwrap_or(reqwest::Method::GET);
-    let mut rb = state.client.request(method_req, &upstream_url);
-
-    for (name, value) in headers_in.iter() {
-        let n = name.as_str().to_ascii_lowercase();
-        if is_hop_by_hop(&n)
-            || matches!(
-                n.as_str(),
-                "origin" | "referer" | "x-presensi-ep-base" | "x-presensi-gateway"
-            )
-        {
-            continue;
-        }
-        if let (Ok(hn), Ok(hv)) = (
-            reqwest::header::HeaderName::from_bytes(name.as_ref()),
-            reqwest::header::HeaderValue::from_bytes(value.as_bytes()),
-        ) {
-            rb = rb.header(hn, hv);
-        }
-    }
-
-    rb = rb.header("Origin", &ep_base);
-    rb = rb.header("Referer", format!("{}/", ep_base));
-
-    if !body_bytes.is_empty() {
-        rb = rb.body(body_bytes);
-    }
-
-    let resp = match rb.send().await {
-        Ok(r) => r,
-        Err(e) => return (StatusCode::BAD_GATEWAY, format!("Proxy error: {}", e)).into_response(),
-    };
-
+async fn process_ep_proxy_resp(
+    resp: reqwest::Response,
+    ep_base: &str,
+) -> (StatusCode, HeaderMap, axum::body::Bytes) {
     let status = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
     let mut out_headers = HeaderMap::new();
 
@@ -438,7 +378,7 @@ async fn ep_proxy(State(state): State<Arc<AppState>>, req: Request) -> impl Into
         }
         if name_lc == "location" {
             if let Ok(val_str) = v.to_str() {
-                let rewritten = rewrite_location(val_str, &ep_base);
+                let rewritten = rewrite_location(val_str, ep_base);
                 if let Ok(hv) = HeaderValue::from_str(&rewritten) {
                     out_headers.insert(HeaderName::from_static("location"), hv);
                 }
@@ -453,60 +393,172 @@ async fn ep_proxy(State(state): State<Arc<AppState>>, req: Request) -> impl Into
         }
     }
 
-    let bytes = match resp.bytes().await {
-        Ok(b) => b,
-        Err(e) => {
-            return (StatusCode::BAD_GATEWAY, format!("Proxy read error: {}", e)).into_response()
+    let bytes = resp.bytes().await.unwrap_or_default();
+    (status, out_headers, bytes)
+}
+
+async fn ep_proxy(State(state): State<Arc<AppState>>, req: Request) -> impl IntoResponse {
+    let headers_in = req.headers().clone();
+    let uri = req.uri().clone();
+    let method = req.method().clone();
+    let ep_base = resolve_ep_base(&headers_in, &uri);
+
+    let path_and_query = uri
+        .path_and_query()
+        .map(|x| x.as_str().to_string())
+        .unwrap_or_else(|| "/ep/".to_string());
+
+    let upstream_path = path_and_query
+        .strip_prefix("/ep")
+        .unwrap_or(&path_and_query)
+        .to_string();
+    let mut upstream_path = if upstream_path.is_empty() {
+        "/".to_string()
+    } else {
+        upstream_path
+    };
+    // Normalisasi path: klien memakai /p/... sebagai path aman, upstream memakai /index.php/...
+    if upstream_path.starts_with("/p/") || upstream_path == "/p" {
+        upstream_path = upstream_path.replacen("/p", "/index.php", 1);
+    }
+    let upstream_url = format!("{}{}", ep_base, upstream_path);
+
+    let body_bytes = axum::body::to_bytes(req.into_body(), usize::MAX)
+        .await
+        .unwrap_or_default();
+
+    let method_req =
+        reqwest::Method::from_bytes(method.as_str().as_bytes()).unwrap_or(reqwest::Method::GET);
+    let mut rb = state.client.request(method_req.clone(), &upstream_url);
+
+    for (name, value) in headers_in.iter() {
+        let n = name.as_str().to_ascii_lowercase();
+        if is_hop_by_hop(&n)
+            || matches!(
+                n.as_str(),
+                "origin" | "referer" | "x-presensi-ep-base" | "x-presensi-gateway"
+            )
+        {
+            continue;
         }
+        if let (Ok(hn), Ok(hv)) = (
+            reqwest::header::HeaderName::from_bytes(name.as_ref()),
+            reqwest::header::HeaderValue::from_bytes(value.as_bytes()),
+        ) {
+            rb = rb.header(hn, hv);
+        }
+    }
+
+    rb = rb.header("Origin", &ep_base);
+    rb = rb.header("Referer", format!("{}/", ep_base));
+
+    if !body_bytes.is_empty() {
+        rb = rb.body(body_bytes.clone());
+    }
+
+    let resp = match rb.send().await {
+        Ok(r) => r,
+        Err(e) => return (StatusCode::BAD_GATEWAY, format!("Proxy error: {}", e)).into_response(),
     };
 
-    // Deteksi Cloudflare challenge / WAF interstitial dari upstream presensi.
-    // Proxy lokal (reqwest) tidak bisa mengeksekusi JS challenge, jadi kirimkan
-    // respons terstruktur agar frontend menampilkan pesan yang jelas alih-alih
-    // menganggap halaman challenge sebagai konten /ep/ yang valid.
-    let content_type_lc = out_headers
-        .get(axum::http::header::CONTENT_TYPE)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
-        .to_ascii_lowercase();
-    let cf_mitigated = out_headers
-        .get("cf-mitigated")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
-        .to_ascii_lowercase();
-    let body_prefix = String::from_utf8_lossy(&bytes[..bytes.len().min(4096)]).to_ascii_lowercase();
-    let is_cloudflare_challenge = status == StatusCode::FORBIDDEN
-        || status == StatusCode::SERVICE_UNAVAILABLE
-        || cf_mitigated.contains("challenge")
-        || body_prefix.contains("just a moment")
-        || body_prefix.contains("__cf_chl")
-        || body_prefix.contains("cf-chl")
-        || body_prefix.contains("challenges.cloudflare.com")
-        || body_prefix.contains("enable javascript and cookies to continue");
+    let (mut status, mut out_headers, mut bytes) = process_ep_proxy_resp(resp, &ep_base).await;
 
-    if is_cloudflare_challenge
-        && (content_type_lc.contains("text/html")
-            || body_prefix.contains("<!doctype html")
-            || body_prefix.contains("<html"))
-    {
-        let payload = serde_json::json!({
-            "error": "Upstream presensi diblokir Cloudflare challenge (Just a moment). Proxy lokal tidak dapat melewati verifikasi JavaScript otomatis.",
-            "code": "EP_CLOUDFLARE_CHALLENGE",
-            "upstream_status": status.as_u16(),
-            "hint": "Coba lagi beberapa saat, pastikan server presensi dapat diakses langsung, atau gunakan jaringan/IP yang diizinkan. Untuk beberapa fitur /ep (mis. presensi web/Ponorogo) mungkin perlu bypass/akses manual bila challenge aktif."
-        });
-        let body = serde_json::to_vec(&payload)
-            .unwrap_or_else(|_| b"{\"error\":\"Cloudflare challenge\"}".to_vec());
-        let mut h = HeaderMap::new();
-        h.insert(
-            axum::http::header::CONTENT_TYPE,
-            HeaderValue::from_static("application/json; charset=utf-8"),
-        );
-        h.insert(
-            HeaderName::from_static("x-tetuko-ep-challenge"),
-            HeaderValue::from_static("1"),
-        );
-        return (StatusCode::BAD_GATEWAY, h, body).into_response();
+    // Deteksi Cloudflare challenge / WAF interstitial dari upstream presensi.
+    // Proxy lokal (reqwest) tidak bisa mengeksekusi JS challenge. Untuk host
+    // Ponorogo, coba bypass via direct IP + Host header (pola yang sama dengan
+    // absensi-log-proxy) sebelum menyerah dengan error terstruktur.
+    let is_cloudflare_challenge_resp = |status: StatusCode, out_headers: &HeaderMap, bytes: &[u8]| {
+        let content_type_lc = out_headers
+            .get(axum::http::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        let cf_mitigated = out_headers
+            .get("cf-mitigated")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        let body_prefix = String::from_utf8_lossy(&bytes[..bytes.len().min(4096)]).to_ascii_lowercase();
+        let challenged = status == StatusCode::FORBIDDEN
+            || status == StatusCode::SERVICE_UNAVAILABLE
+            || cf_mitigated.contains("challenge")
+            || body_prefix.contains("just a moment")
+            || body_prefix.contains("__cf_chl")
+            || body_prefix.contains("cf-chl")
+            || body_prefix.contains("challenges.cloudflare.com")
+            || body_prefix.contains("enable javascript and cookies to continue");
+        challenged
+            && (content_type_lc.contains("text/html")
+                || body_prefix.contains("<!doctype html")
+                || body_prefix.contains("<html"))
+    };
+
+    if is_cloudflare_challenge_resp(status, &out_headers, &bytes) {
+        // Coba bypass direct IP untuk presensi.ponorogo.go.id (Cloudflare sering hanya di domain).
+        let ep_host = reqwest::Url::parse(&ep_base)
+            .ok()
+            .and_then(|u| u.host_str().map(|h| h.to_ascii_lowercase()));
+        let ponorogo_host = ep_host.as_deref() == Some("presensi.ponorogo.go.id");
+        let mut bypass_ok = false;
+        if ponorogo_host {
+            let ip_url = format!("https://103.109.206.102{}", upstream_path);
+            if let Ok(ip_client) = reqwest::Client::builder().danger_accept_invalid_certs(true).build() {
+                let mut rb2 = ip_client.request(method_req.clone(), &ip_url);
+                for (name, value) in headers_in.iter() {
+                    let n = name.as_str().to_ascii_lowercase();
+                    if is_hop_by_hop(&n)
+                        || matches!(
+                            n.as_str(),
+                            "origin" | "referer" | "host" | "x-presensi-ep-base" | "x-presensi-gateway"
+                        )
+                    {
+                        continue;
+                    }
+                    if let (Ok(hn), Ok(hv)) = (
+                        reqwest::header::HeaderName::from_bytes(name.as_ref()),
+                        reqwest::header::HeaderValue::from_bytes(value.as_bytes()),
+                    ) {
+                        rb2 = rb2.header(hn, hv);
+                    }
+                }
+                rb2 = rb2.header("Host", "presensi.ponorogo.go.id");
+                rb2 = rb2.header("Origin", "https://presensi.ponorogo.go.id");
+                rb2 = rb2.header("Referer", "https://presensi.ponorogo.go.id/");
+                if !body_bytes.is_empty() {
+                    rb2 = rb2.body(body_bytes.clone());
+                }
+                if let Ok(resp2) = rb2.send().await {
+                    let (s2, h2, b2) = process_ep_proxy_resp(resp2, &ep_base).await;
+                    if !is_cloudflare_challenge_resp(s2, &h2, &b2) {
+                        status = s2;
+                        out_headers = h2;
+                        bytes = b2;
+                        bypass_ok = true;
+                    }
+                }
+            }
+        }
+
+        if !bypass_ok && is_cloudflare_challenge_resp(status, &out_headers, &bytes) {
+            let payload = serde_json::json!({
+                "error": "Upstream presensi diblokir Cloudflare challenge (Just a moment). Proxy lokal tidak dapat melewati verifikasi JavaScript otomatis.",
+                "code": "EP_CLOUDFLARE_CHALLENGE",
+                "upstream_status": status.as_u16(),
+                "hint": "Coba lagi beberapa saat, pastikan server presensi dapat diakses langsung, atau gunakan jaringan/IP yang diizinkan. Untuk beberapa fitur /ep (mis. presensi web/Ponorogo) mungkin perlu bypass/akses manual bila challenge aktif."
+            });
+            let body = serde_json::to_vec(&payload)
+                .unwrap_or_else(|_| b"{\"error\":\"Cloudflare challenge\"}".to_vec());
+            let mut h = HeaderMap::new();
+            h.insert(
+                axum::http::header::CONTENT_TYPE,
+                HeaderValue::from_static("application/json; charset=utf-8"),
+            );
+            h.insert(
+                HeaderName::from_static("x-tetuko-ep-challenge"),
+                HeaderValue::from_static("1"),
+            );
+            return (StatusCode::BAD_GATEWAY, h, body).into_response();
+        }
     }
 
     (status, out_headers, bytes).into_response()
