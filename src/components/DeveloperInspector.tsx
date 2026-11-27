@@ -314,11 +314,11 @@ export default function DeveloperInspector({
             <button
               type="button"
               aria-label="Tutup panel developer"
-              className="developer-inspector-layer fixed inset-0 z-[2147482999] bg-slate-950/70 animate-fade-in"
+              className="modal-layer developer-inspector-layer fixed inset-0 z-[2147482999] bg-slate-950/70 animate-fade-in"
               onClick={() => setMobileOpen(false)}
             />
 
-            <aside className="developer-inspector-layer fixed inset-0 z-[2147483000] flex h-[100dvh] w-full flex-col overflow-hidden bg-slate-950 text-slate-200 font-sans shadow-2xl animate-pop-in">
+            <aside className="modal-layer developer-inspector-layer fixed inset-0 z-[2147483000] flex h-[100dvh] w-full flex-col overflow-hidden bg-slate-950 text-slate-200 font-sans shadow-2xl animate-pop-in">
               {/* Header */}
               <div className="flex items-center justify-between gap-3 border-b border-slate-800/80 px-4 py-3 shrink-0 bg-slate-900/50">
                 <div className="flex items-center gap-2 min-w-0">

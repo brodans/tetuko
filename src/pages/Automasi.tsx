@@ -415,7 +415,7 @@ export default function Automasi() {
       <AnimatePresence>
         {konfirmasiHapus && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-900/60">
+            className="modal-layer fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-900/60">
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
               className="w-full max-w-xs bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-2xl border border-slate-200 dark:border-slate-700">
               <div className="flex items-center gap-3 mb-3">

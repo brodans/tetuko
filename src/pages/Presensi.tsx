@@ -1786,8 +1786,8 @@ function withTimeout<T>(promise: Promise<T>, ms: number, timeoutMsg: string): Pr
         
         {/* Live Camera View */}
         {isCameraActive && (
-          <div className="modal-layer fixed inset-0 z-50 bg-black flex flex-col">
-            <div className="flex justify-between items-center p-4 bg-black text-white">
+          <div className="modal-layer modal-fullscreen fixed inset-0 z-50 bg-black flex flex-col">
+            <div className="flex justify-between items-center p-4 bg-black text-white" style={{ paddingTop: "calc(var(--sat, env(safe-area-inset-top, 0px)) + 1rem)" }}>
               <span className="font-medium">Ambil Foto Presensi</span>
               <button onClick={stopCamera} className="p-2 bg-white/20 hover:bg-white/30 rounded-full transition-colors">
                 <X className="w-6 h-6" />
@@ -1802,7 +1802,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, timeoutMsg: string): Pr
                 className="max-h-full max-w-full object-contain"
               />
             </div>
-            <div className="p-8 bg-black flex justify-center items-center pb-12">
+            <div className="p-8 bg-black flex justify-center items-center pb-12" style={{ paddingBottom: "calc(var(--sab, env(safe-area-inset-bottom, 0px)) + 3rem)" }}>
               <button 
                 onClick={capturePhoto} 
                 className="w-20 h-20 bg-white rounded-full border-4 border-slate-300 shadow-lg active:scale-95 transition-transform flex items-center justify-center"

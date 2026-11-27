@@ -101,7 +101,7 @@ function ConfirmLogoutModal({ open, onCancel, onConfirm }: { open: boolean; onCa
     try { await onConfirm(); } finally { setBusy(false); }
   };
   return createPortal(
-    <div className="fixed inset-0 z-[2147483600] flex items-center justify-center bg-slate-950/50 p-4" onClick={() => !busy && onCancel()}>
+    <div className="modal-layer fixed inset-0 z-[2147483600] flex items-center justify-center bg-slate-950/50 p-4" onClick={() => !busy && onCancel()}>
       <div className="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start gap-3">
           <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 shrink-0">

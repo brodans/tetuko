@@ -117,7 +117,7 @@ export default function PresetAutomasiFormModal({
           exit={{ opacity: 0 }}
           // onMouseDown bukan onClick — agar tidak konflik dengan label file input
           onMouseDown={handleBackdropMouseDown}
-          className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/60"
+          className="modal-layer fixed inset-0 z-[200] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/60"
         >
           <motion.div
             ref={panelRef}

@@ -1582,7 +1582,7 @@ function PonorogoLaporanPage() {
       {reportModalOpen && reportBlob && reportUrl && (
         <div
           className={`report-modal-overlay modal-layer fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 ${
-            reportModalFullscreen ? 'is-fullscreen p-0' : 'p-2 sm:p-4'
+            reportModalFullscreen ? 'modal-fullscreen is-fullscreen p-0' : 'p-2 sm:p-4'
           }`}
           role="dialog"
           aria-modal="true"
@@ -1595,6 +1595,7 @@ function PonorogoLaporanPage() {
                 ? 'report-viewer-panel-fullscreen fixed inset-0 z-[101] h-[100dvh] max-w-none rounded-none'
                 : 'h-[88dvh] max-w-6xl rounded-2xl sm:rounded-3xl'
             }`}
+            style={reportModalFullscreen ? { paddingTop: 'var(--sat, env(safe-area-inset-top, 0px))', paddingBottom: 'var(--sab, env(safe-area-inset-bottom, 0px))' } : undefined}
           >
             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800/80 sm:gap-3 sm:px-4 sm:py-3">
               <div className="flex items-center gap-2 min-w-0">

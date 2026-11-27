@@ -372,6 +372,14 @@
     var(--modal-safe-inset-bottom) var(--modal-safe-inset-left);
 }
 
+.modal-layer.fixed.inset-0.modal-fullscreen {
+  --modal-safe-inset-top: var(--poni-atas, var(--sat, 0px));
+  --modal-safe-inset-right: var(--poni-kanan, 0px);
+  --modal-safe-inset-bottom: var(--poni-bawah, var(--sab, 0px));
+  --modal-safe-inset-left: var(--poni-kiri, 0px);
+  padding: 0;
+}
+
 .modal-layer.fixed.inset-0 > .modal-panel-enter {
   max-height: calc(100dvh - var(--modal-safe-inset-top) - var(--modal-safe-inset-bottom));
 }
