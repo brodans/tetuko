@@ -359,7 +359,11 @@ async fn process_ep_proxy_resp(
                     .filter_map(|part| {
                         let t = part.trim();
                         let tl = t.to_ascii_lowercase();
-                        if tl.starts_with("domain=") || tl.starts_with("path=") {
+                        if tl.starts_with("domain=")
+                            || tl.starts_with("path=")
+                            || tl == "secure"
+                            || tl.starts_with("samesite=")
+                        {
                             None
                         } else {
                             Some(t.to_string())
@@ -368,9 +372,9 @@ async fn process_ep_proxy_resp(
                     .collect::<Vec<_>>()
                     .join("; ");
                 if !filtered.is_empty() {
-                    filtered.push_str("; Path=/ep");
+                    filtered.push_str("; Path=/ep; SameSite=Lax");
                 } else {
-                    filtered = "Path=/ep".to_string();
+                    filtered = "Path=/ep; SameSite=Lax".to_string();
                 }
                 if let Ok(hv) = HeaderValue::from_str(&filtered) {
                     out_headers.append(HeaderName::from_static("set-cookie"), hv);

@@ -413,9 +413,9 @@ async function start() {
             .split(';')
             .filter((p: string) => {
               const t = p.trim().toLowerCase();
-              return !t.startsWith('domain=') && !t.startsWith('path=');
+              return !t.startsWith('domain=') && !t.startsWith('path=') && t !== 'secure' && !t.startsWith('samesite=');
             })
-            .join(';') + '; Path=/ep';
+            .join(';') + '; Path=/ep; SameSite=Lax';
           res.append('Set-Cookie', filtered);
         }
       } else {
@@ -423,7 +423,7 @@ async function start() {
         if (sc) {
           const arr = Array.isArray(sc) ? sc : [sc];
           for (const c of arr) {
-            const filtered = String(c).split(';').filter((p: string) => { const t = p.trim().toLowerCase(); return !t.startsWith('domain=') && !t.startsWith('path='); }).join(';') + '; Path=/ep';
+            const filtered = String(c).split(';').filter((p: string) => { const t = p.trim().toLowerCase(); return !t.startsWith('domain=') && !t.startsWith('path=') && t !== 'secure' && !t.startsWith('samesite='); }).join(';') + '; Path=/ep; SameSite=Lax';
             res.append('Set-Cookie', filtered);
           }
         }

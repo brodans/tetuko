@@ -343,14 +343,15 @@ export default function ServerHub({ isDarkMode, toggleDarkMode, onAppLogout }: P
   const selectedSavedAccounts = selected ? (savedAccountsMap[selected] ?? []) : [];
 
   return (
-    <div className="fixed inset-0 overflow-auto bg-slate-200 dark:bg-[#0a0f1c] p-4 sm:p-8">
+    <div className="fixed inset-0 overflow-auto bg-slate-200 dark:bg-[#0a0f1c] p-4 sm:p-8" style={{ paddingTop: 'max(1rem, calc(var(--poni-atas, env(safe-area-inset-top, 0px)) + 1rem))', paddingBottom: 'max(1rem, calc(var(--poni-bawah, env(safe-area-inset-bottom, 0px)) + 1rem))' }}>
       <div className="fixed inset-0 z-0 pointer-events-none">
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#00000014_1px,transparent_1px),linear-gradient(to_bottom,#00000014_1px,transparent_1px)] bg-[size:24px_24px] dark:bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)]" />
       </div>
       <button
         type="button"
         onClick={toggleDarkMode}
-        className="fixed top-4 right-4 z-20 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5 text-slate-700 dark:text-slate-200 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+        className="fixed right-4 z-20 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5 text-slate-700 dark:text-slate-200 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+        style={{ top: 'max(1rem, calc(var(--poni-atas, env(safe-area-inset-top, 0px)) + 1rem))' }}
         aria-label="Toggle tema"
       >
         {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
