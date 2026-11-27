@@ -3,13 +3,7 @@ import cors from 'cors';
 import { createServer as createViteServer } from 'vite';
 import http from 'node:http';
 import https from 'node:https';
-import { spawn } from 'node:child_process';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { URL } from 'node:url';
-
-const DIR_PROYEK = path.dirname(fileURLToPath(import.meta.url));
 
 const PORT = Number(process.env.PORT || 5173);
 const PRESENSI_VERSION = 89;
@@ -58,77 +52,6 @@ async function readRawBody(req: express.Request): Promise<Buffer> {
 async function start() {
   const app = express();
   app.use(cors({ origin: true, credentials: true }));
-
-  // ── OCR Captcha (dev, ddddocr via ocr_service.py) ────────────────────
-  const OCR_HOST = process.env.EPRESENSI_OCR_HOST || process.env.OCR_HOST || '127.0.0.1';
-  const OCR_PORT = Number(process.env.EPRESENSI_OCR_PORT || process.env.OCR_PORT || 8791);
-  let anakOcr: ReturnType<typeof spawn> | null = null;
-  let ocrPythonTersedia = true;
-  let waktuSpawnTerakhir = 0;
-
-  function ocrSehat(timeoutMs = 1200): Promise<boolean> {
-    return new Promise((resolve) => {
-      const req = http.get({ host: OCR_HOST, port: OCR_PORT, path: '/health', timeout: timeoutMs }, (res) => {
-        res.resume();
-        resolve(res.statusCode === 200);
-      });
-      req.on('timeout', () => { req.destroy(); resolve(false); });
-      req.on('error', () => resolve(false));
-    });
-  }
-  function cariOcrPy(): string | null {
-    const p = path.join(DIR_PROYEK, 'ocr_service.py');
-    try { return fs.existsSync(p) ? p : null; } catch { return null; }
-  }
-  function jalankanLayananOcr() {
-    if (!ocrPythonTersedia) return;
-    if (anakOcr && anakOcr.exitCode === null && !anakOcr.killed) return;
-    const ocrPy = cariOcrPy();
-    if (!ocrPy) { ocrPythonTersedia = false; console.log('[ocr] ocr_service.py tidak ditemukan, captcha manual.'); return; }
-    anakOcr = spawn('python3', [ocrPy, '--warmup'], {
-      cwd: path.dirname(ocrPy),
-      stdio: 'ignore',
-      env: { ...process.env, EPRESENSI_OCR_HOST: OCR_HOST, EPRESENSI_OCR_PORT: String(OCR_PORT), OCR_HOST, OCR_PORT: String(OCR_PORT) },
-    });
-    anakOcr.on('error', (err) => { console.log('[ocr] gagal spawn python3:', (err as Error).message); ocrPythonTersedia = false; });
-    waktuSpawnTerakhir = Date.now();
-    console.log('[ocr] menjalankan ocr_service.py');
-  }
-  async function pastikanOcr(waktuTungguMs = 15000): Promise<boolean> {
-    if (!ocrPythonTersedia) return false;
-    const mulai = Date.now();
-    while (Date.now() - mulai < waktuTungguMs) {
-      if (await ocrSehat(1000)) return true;
-      if (Date.now() - waktuSpawnTerakhir > 5000) jalankanLayananOcr();
-      await new Promise((r) => setTimeout(r, 500));
-    }
-    return ocrSehat(1000);
-  }
-
-  app.all('/api/ocr', async (req, res) => {
-    try {
-      if (req.method === 'GET') {
-        const sehat = await ocrSehat(500);
-        return res.status(sehat ? 200 : 503).json({ ok: sehat, engine: 'python-ddddocr' });
-      }
-      const gambar = await readRawBody(req);
-      if (!gambar.length) return res.status(400).json({ ok: false, error: 'body gambar kosong' });
-      const siap = await pastikanOcr(20000);
-      if (!siap) return res.status(502).json({ ok: false, error: 'OCR Python tidak tersedia. Pastikan ddddocr terpasang dan ocr_service.py bisa dijalankan.' });
-      const up = http.request({ host: OCR_HOST, port: OCR_PORT, path: '/ocr', method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'Content-Length': gambar.length } }, (ures) => {
-        res.status(ures.statusCode ?? 200);
-        res.setHeader('Content-Type', ures.headers['content-type'] || 'application/json; charset=utf-8');
-        ures.pipe(res);
-      });
-      up.on('error', () => res.status(502).json({ ok: false, error: 'gagal meneruskan gambar ke layanan OCR' }));
-      up.end(gambar);
-    } catch (e: any) {
-      res.status(500).json({ ok: false, error: String(e?.message || e) });
-    }
-  });
-  // start OCR in background
-  jalankanLayananOcr();
-  void pastikanOcr(60000).catch(() => {});
 
   // RPC
   app.post('/api/rpc', express.json({ limit: '2mb' }), async (req, res) => {

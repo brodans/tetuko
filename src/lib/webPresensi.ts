@@ -186,7 +186,6 @@ function pastikanBukanLogin(html: string): void {
 // ---------------------------------------------------------------------------
 
 export interface CaptchaResult { url: string; blob: Blob; }
-export interface OcrResult { teks: string; kandidat: string[]; yakin: boolean; }
 
 export async function muatCaptcha(): Promise<CaptchaResult> {
   // Coba beberapa variasi endpoint karena tiap server/portal (Jatim/Madiun/mirror)
@@ -227,41 +226,7 @@ export async function muatCaptcha(): Promise<CaptchaResult> {
   throw new Error('Gagal memuat captcha (tidak ada endpoint yang cocok).');
 }
 
-export async function selesaikanCaptcha(blob: Blob): Promise<OcrResult> {
-  // OCR otomatis hanya aktif di runtime native Tauri (ONNX built-in Rust) dan dev lokal.
-  // Di deployment Vercel captcha tetap manual.
-  const tauriRuntime = isTauriRuntime();
-  const allowApiOcr = tauriRuntime || (typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV);
-  if (!allowApiOcr) {
-    return { teks: '', kandidat: [], yakin: false };
-  }
 
-  // Panggil endpoint OCR lokal:
-  // - Tauri: dilayani native Rust (ONNX built-in, tanpa python/ketergantungan eksternal)
-  // - Dev: dilayani dev-server (ocr_service.py) bila tersedia
-  try {
-    const target = apiUrl('/api/ocr');
-    const res = tauriRuntime
-      ? await tauriResilientFetch(target, {
-          method: 'POST',
-          body: blob,
-          headers: { 'Content-Type': 'application/octet-stream' },
-        })
-      : await fetch(target, {
-          method: 'POST',
-          body: blob,
-          headers: { 'Content-Type': 'application/octet-stream' },
-        });
-
-    const data = await res.json().catch(() => ({})) as { ok?: boolean; text?: string; kandidat?: string[]; yakin?: boolean; error?: string };
-    if (!res.ok || !data.ok) {
-      return { teks: '', kandidat: [], yakin: false };
-    }
-    return { teks: data.text || '', kandidat: data.kandidat || [], yakin: !!data.yakin };
-  } catch {
-    return { teks: '', kandidat: [], yakin: false };
-  }
-}
 
 export async function login({ nip, password, captcha }: { nip: string; password: string; captcha: string }): Promise<boolean> {
   const body = new URLSearchParams({

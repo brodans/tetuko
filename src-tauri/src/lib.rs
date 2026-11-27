@@ -19,7 +19,6 @@ use tauri::{
 #[cfg(desktop)]
 use tauri_plugin_autostart::ManagerExt;
 mod automation;
-mod captcha_ocr;
 mod firestore_pull;
 use tower_http::cors::{AllowHeaders, AllowOrigin, CorsLayer};
 
@@ -1106,69 +1105,7 @@ async fn absensi_log_proxy_handler(
     (status, Json(v)).into_response()
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-//  OCR Captcha (Python ONNX/ddddocr service proxy + auto-start)
-// ═══════════════════════════════════════════════════════════════════════
 
-// ═══════════════════════════════════════════════════════════════════════
-//  OCR Captcha - ONNX built-in native Rust (tanpa python/ketergantungan eksternal)
-// ═══════════════════════════════════════════════════════════════════════
-
-async fn ocr_handler(_state: State<Arc<AppState>>, req: Request) -> impl IntoResponse {
-    let method = req.method().clone();
-    if method == axum::http::Method::GET {
-        let ready = captcha_ocr::engine_ready();
-        return (
-            if ready {
-                StatusCode::OK
-            } else {
-                StatusCode::SERVICE_UNAVAILABLE
-            },
-            Json(json!({
-                "ok": ready,
-                "engine": "onnx-rust-builtin",
-                "panjang": 4
-            })),
-        )
-            .into_response();
-    }
-
-    if method != axum::http::Method::POST {
-        return (
-            StatusCode::METHOD_NOT_ALLOWED,
-            Json(json!({"ok": false, "error": "Method not allowed"})),
-        )
-            .into_response();
-    }
-
-    let body = match axum::body::to_bytes(req.into_body(), 2 * 1024 * 1024).await {
-        Ok(b) => b,
-        Err(e) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({"ok": false, "error": format!("Body OCR tidak valid: {}", e)})),
-            )
-                .into_response()
-        }
-    };
-    if body.is_empty() {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"ok": false, "error": "body gambar kosong"})),
-        )
-            .into_response();
-    }
-
-    let bytes = body.to_vec();
-    match tokio::task::spawn_blocking(move || captcha_ocr::solve_captcha(&bytes)).await {
-        Ok(r) => (StatusCode::OK, Json(r)).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "error": format!("OCR gagal: {}", e)})),
-        )
-            .into_response(),
-    }
-}
 
 fn build_router(state: Arc<AppState>) -> Router {
     // Proxy lokal dipakai dari webview Tauri/dev dengan credentials (cookie sesi /ep).
@@ -1190,7 +1127,6 @@ fn build_router(state: Arc<AppState>) -> Router {
         .route("/api/proxy-multipart", post(ponorogo_multipart_handler))
         .route("/api/proxy-image", get(proxy_image_handler))
         .route("/api/absensi-log-proxy", get(absensi_log_proxy_handler))
-        .route("/api/ocr", any(ocr_handler))
         .route("/api/ponorogo/proxy", post(ponorogo_proxy_handler))
         .route(
             "/api/ponorogo/proxy-multipart",
@@ -1204,11 +1140,6 @@ fn build_router(state: Arc<AppState>) -> Router {
 }
 
 async fn start_local_server() {
-    // Warmup OCR ONNX native di background agar captcha pertama cepat & load awal tetap optimal
-    tauri::async_runtime::spawn_blocking(|| {
-        captcha_ocr::warmup();
-    });
-
     let client = match reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .build()

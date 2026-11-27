@@ -8,7 +8,7 @@ import { useAppContext } from '../context/AppContext';
 import { SERVER_PROFILES, type ServerProfileId } from '../lib/serverProfiles';
 import { loginServerPusat, tandaiAktifServer, imeiStabil, simpanImei } from '../lib/serverAutoLogin';
 import { APP_LOGO } from '../lib/appIdentity';
-import { ambilImei, login as webLogin, logout as webLogout, muatCaptcha, selesaikanCaptcha, setWebPresensiEpBase } from '../lib/webPresensi';
+import { ambilImei, login as webLogin, logout as webLogout, muatCaptcha, setWebPresensiEpBase } from '../lib/webPresensi';
 import { loadServerCreds, loadAllServerCreds, saveServerCreds, deleteServerCreds, setActiveServerCred, type SavedServerCreds } from '../lib/loginCredsStore';
 import { loadAppAuthSession } from '../lib/appAuthSession';
 import { isProfileAllowed } from '../lib/appUserManager';
@@ -23,7 +23,7 @@ interface Props {
   onAppLogout?: () => void;
 }
 
-const MAX_OCR_TRY = 3;
+
 
 export default function ServerHub({ isDarkMode, toggleDarkMode, onAppLogout }: Props) {
   const { loginAs, setServerProfileId } = useAppContext();
@@ -159,31 +159,16 @@ export default function ServerHub({ isDarkMode, toggleDarkMode, onAppLogout }: P
   const loadCaptcha = useCallback(async (_hint = '') => {
     if (!profile) return;
     setCaptchaLoading(true);
-    setCaptchaInfo('');
+    setCaptchaInfo(_hint || '');
     setCaptchaText('');
     setRecoveredImei(null);
     try {
       setWebPresensiEpBase(profile.epBaseUrl);
-      let blob: Blob | null = null;
-      let url: string | null = null;
-      for (let i = 1; i <= MAX_OCR_TRY; i++) {
-        const got = await muatCaptcha();
-        if (captchaUrl?.startsWith('blob:')) { try { URL.revokeObjectURL(captchaUrl); } catch {} }
-        blob = got.blob;
-        url = got.url;
-        setCaptchaUrl(got.url);
-        const ocr = await selesaikanCaptcha(got.blob);
-        if (ocr.teks) {
-          setCaptchaText(ocr.teks);
-          captchaBlobRef.current = blob;
-          setCaptchaLoading(false);
-          setCaptchaInfo('');
-          return;
-        }
-      }
-      if (url) setCaptchaUrl(url);
-      captchaBlobRef.current = blob;
-      setCaptchaInfo('Ketik kode captcha.');
+      const got = await muatCaptcha();
+      if (captchaUrl?.startsWith('blob:')) { try { URL.revokeObjectURL(captchaUrl); } catch {} }
+      captchaBlobRef.current = got.blob;
+      setCaptchaUrl(got.url);
+      setCaptchaInfo(_hint || 'Ketik kode captcha.');
     } catch (e: any) {
       setCaptchaInfo(`Gagal memuat captcha${e?.message ? `: ${e.message}` : ''}`);
     } finally {

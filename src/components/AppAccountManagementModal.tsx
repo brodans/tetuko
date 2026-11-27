@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { X, Users, Shield, Server, Save, Plus, Edit3, Trash2, Eye, EyeOff, Loader2, CheckCircle2, AlertCircle, KeyRound, ChevronDown, RefreshCw, Smartphone, Check } from 'lucide-react';
 import { SERVER_PROFILES, type ServerProfileId } from '../lib/serverProfiles';
 import { loadServerCreds, saveServerCreds, deleteServerCreds } from '../lib/loginCredsStore';
-import { ambilImei, login as webLogin, muatCaptcha, selesaikanCaptcha, setWebPresensiEpBase } from '../lib/webPresensi';
+import { ambilImei, login as webLogin, muatCaptcha, setWebPresensiEpBase } from '../lib/webPresensi';
 import {
   fetchAllAppUsers, createAppUser, updateAppUser, deleteAppUser,
   getAdminAuth, setAdminPassword, setAdminUsername as setAdminUsernameApi, verifyAdminCredentials,
@@ -374,20 +374,14 @@ function ServerCredsTab() {
   const loadCaptcha = async (id: ServerProfileId, opts?: { autoOcr?: boolean }) => {
     const prevUrl = imei[id]?.url;
     if (prevUrl?.startsWith('blob:')) { try { URL.revokeObjectURL(prevUrl); } catch {} }
-    setI(id, { open: true, loading: true, error: '', info: opts?.autoOcr ? 'Membaca captcha otomatis…' : 'Memuat captcha…', url: null });
+    setI(id, { open: true, loading: true, error: '', info: 'Memuat captcha…', url: null });
     try {
       const profile = SERVER_PROFILES.find(p => p.id === id);
       if (profile?.epBaseUrl) setWebPresensiEpBase(profile.epBaseUrl);
       else setWebPresensiEpBase(null);
       const cap = await muatCaptcha();
       captchaBlobRef.current[id] = cap.blob;
-      setI(id, { loading: false, url: cap.url, info: opts?.autoOcr ? 'Membaca captcha otomatis…' : 'Captcha siap. Isi/cek teks lalu verifikasi.' });
-      if (opts?.autoOcr !== false) {
-        const ocr = await selesaikanCaptcha(cap.blob).catch(() => ({ teks: '', kandidat: [] as string[], yakin: false }));
-        const teks = (ocr.teks || '').trim();
-        if (teks) setI(id, { text: teks, info: ocr.yakin ? 'Captcha terbaca otomatis. Periksa lalu klik Verifikasi & Ambil IMEI.' : 'Captcha terbaca (perlu dicek). Koreksi jika salah lalu verifikasi.' });
-        else setI(id, { info: 'Captcha tidak terbaca otomatis. Isi teks captcha secara manual.' });
-      }
+      setI(id, { loading: false, url: cap.url, info: 'Ketik kode captcha, lalu klik Verifikasi & Ambil IMEI.' });
     } catch (e: any) {
       setI(id, { loading: false, error: e?.message || 'Gagal memuat captcha.', info: '' });
     }

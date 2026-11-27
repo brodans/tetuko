@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import {
   ambilBerkas, ambilDetailPegawai, ambilIjinPegawai, ambilImei, ambilKehadiran,
-  ambilLatlong, ambilPerizinan, login, logout, muatCaptcha, selesaikanCaptcha,
+  ambilLatlong, ambilPerizinan, login, logout, muatCaptcha,
   urlBerkas, setWebPresensiEpBase,
   type BarisIjin, type BarisKehadiran, type DetailPegawai, type HasilImei,
   type HasilKehadiran, type HasilPerizinan,
@@ -20,9 +20,7 @@ import { IS_VERCEL_DEPLOY } from '../lib/deployMode';
 import { useToast } from '../components/ui/Toast';
 import { saveBlobSmart } from '../lib/nativeSave';
 
-const MAX_PERCOBAAN_OCR = 3;
-// OCR otomatis untuk dev lokal & Tauri native (proxy /api/ocr + python ONNX); di Vercel selalu manual.
-const OCR_LOKAL = (import.meta.env.DEV || (typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window))) && !IS_VERCEL_DEPLOY;
+
 
 function sesiKey(profileId: string) { return `portal:web-presensi-session:${profileId}`; }
 
@@ -323,7 +321,6 @@ export default function WebPresensi() {
   const [captcha, setCaptcha] = useState('');
   const [captchaImg, setCaptchaImg] = useState<string | null>(null);
   const [captchaInfo, setCaptchaInfo] = useState('');
-  const [ocrTersedia, setOcrTersedia] = useState<boolean | null>(null);
   const [loadingCaptcha, setLoadingCaptcha] = useState(false);
   const [loadingProses, setLoadingProses] = useState(false);
   const [loadingLogout, setLoadingLogout] = useState(false);
@@ -360,39 +357,19 @@ export default function WebPresensi() {
   function simpanCaptcha(nilai: string) { captchaRef.current = nilai; setCaptcha(nilai); }
 
   const refreshCaptcha = useCallback(async (alasan = '') => {
-    setLoadingCaptcha(true); simpanCaptcha(''); setCaptchaInfo(alasan || 'Memuat captcha...');
-    let blob: Blob | null = null;
+    setLoadingCaptcha(true); simpanCaptcha('');
+    setCaptchaInfo(alasan || 'Memuat captcha...');
     try {
       const hasil = await muatCaptcha();
       setCaptchaImg(hasil.url);
-      setCaptchaInfo((alasan ? alasan + ' ' : '') + (OCR_LOKAL ? 'Membaca captcha otomatis...' : 'Ketik kode captcha dari gambar di atas.'));
-      blob = hasil.blob;
+      setCaptchaInfo((alasan ? alasan + ' ' : '') + 'Ketik kode captcha dari gambar di atas.');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      setCaptchaImg(null); setOcrTersedia(false);
-      setCaptchaInfo(`⚠ Gagal memuat captcha — ${msg}. Klik ikon refresh untuk coba lagi.`);
-      setLoadingCaptcha(false); return '';
+      setCaptchaImg(null);
+      setCaptchaInfo(`Gagal memuat captcha — ${msg}. Klik ikon refresh untuk coba lagi.`);
+    } finally {
+      setLoadingCaptcha(false);
     }
-
-    if (OCR_LOKAL) {
-      try {
-        for (let i = 1; i <= MAX_PERCOBAAN_OCR; i++) {
-          const hasilOcr = await selesaikanCaptcha(blob!);
-          if (hasilOcr.teks) {
-            simpanCaptcha(hasilOcr.teks); setOcrTersedia(true);
-            setCaptchaInfo((alasan ? alasan + ' ' : '') + `Terbaca: ${hasilOcr.teks}` + (hasilOcr.yakin ? ' ✓' : ' (kurang yakin — ketik ulang jika perlu)'));
-            setLoadingCaptcha(false); return hasilOcr.teks;
-          }
-          if (i < MAX_PERCOBAAN_OCR) {
-            setCaptchaInfo(`Mencoba captcha baru (${i}/${MAX_PERCOBAAN_OCR})...`);
-            try { const { url: url2, blob: blob2 } = await muatCaptcha(); setCaptchaImg(url2); blob = blob2; } catch { break; }
-          }
-        }
-      } catch { /* fallback manual */ }
-    }
-    setOcrTersedia(false);
-    setCaptchaInfo('Ketik kode captcha dari gambar di atas.');
-    setLoadingCaptcha(false);
     return '';
   }, []);
 
@@ -602,7 +579,7 @@ export default function WebPresensi() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto] sm:items-end sm:gap-2">
               <div className="order-2 sm:order-1">
                 <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5" htmlFor="web-captcha">Captcha</label>
-                <input id="web-captcha" value={captcha} onChange={(e) => simpanCaptcha(e.target.value.replace(/\s/g, ''))} placeholder={ocrTersedia && OCR_LOKAL ? 'Terisi otomatis' : 'Ketik kode captcha'} autoComplete="off" inputMode="numeric" maxLength={6} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 transition" />
+                <input id="web-captcha" value={captcha} onChange={(e) => simpanCaptcha(e.target.value.replace(/\s/g, ''))} placeholder="Ketik kode captcha" autoComplete="off" inputMode="numeric" maxLength={6} className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 transition" />
               </div>
               <div className="order-1 flex items-center gap-2 sm:order-2">
                 <div className={`relative h-11 w-[191px] shrink-0 overflow-hidden rounded-none border ${captchaImg ? 'border-black bg-black' : 'border-dashed border-slate-300 bg-white dark:border-slate-600'}`} aria-busy={loadingCaptcha}>
