@@ -165,12 +165,12 @@ export default function AppLoginScreen({ onLogin, isDarkMode, toggleDarkMode }: 
   const canSubmit = !isLocked && !isAuthing && sanitizeUsername(state.username).length > 0 && sanitizePassword(state.pin).length > 0;
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center p-4 sm:p-8 font-sans bg-slate-200 dark:bg-[#0a0f1c] overflow-hidden" style={{ paddingTop: 'max(1rem, calc(var(--poni-atas, env(safe-area-inset-top, 0px)) + 1rem))', paddingBottom: 'max(1rem, calc(var(--poni-bawah, env(safe-area-inset-bottom, 0px)) + 1rem))' }}>
+    <div className="relative min-h-screen flex items-center justify-center p-4 sm:p-8 font-sans bg-slate-200 dark:bg-[#0a0f1c] overflow-hidden" style={isTauriRuntime() ? { paddingTop: 'max(1rem, calc(var(--poni-atas, env(safe-area-inset-top, 0px)) + 1rem))', paddingBottom: 'max(1rem, calc(var(--poni-bawah, env(safe-area-inset-bottom, 0px)) + 1rem))' } : undefined}>
       <div className="absolute inset-0 z-0 pointer-events-none">
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#00000014_1px,transparent_1px),linear-gradient(to_bottom,#00000014_1px,transparent_1px)] bg-[size:24px_24px] dark:bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)]" />
       </div>
 
-      <div className="absolute right-6 z-20" style={{ top: 'max(1.5rem, calc(var(--poni-atas, env(safe-area-inset-top, 0px)) + 1.5rem))' }}>
+      <div className="absolute right-6 z-20" style={isTauriRuntime() ? { top: 'max(1.5rem, calc(var(--poni-atas, env(safe-area-inset-top, 0px)) + 1.5rem))' } : undefined}>
         <button onClick={toggleDarkMode} className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" aria-label="Toggle tema">
           {isDarkMode ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-indigo-500" />}
         </button>

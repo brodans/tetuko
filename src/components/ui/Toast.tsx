@@ -71,7 +71,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={api}>
       {children}
 
-      <div className="fixed bottom-4 right-4 left-4 sm:left-auto z-[110] flex flex-col items-end gap-2 pointer-events-none">
+      <div className="toast-container-safe fixed bottom-4 right-4 left-4 sm:left-auto z-[110] flex flex-col items-end gap-2 pointer-events-none">
         <AnimatePresence>
           {toasts.map(toast => {
             const { icon: Icon, ring, iconColor } = KIND_STYLES[toast.kind];

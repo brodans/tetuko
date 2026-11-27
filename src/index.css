@@ -364,24 +364,35 @@
 }
 
 .modal-layer.fixed.inset-0 {
+  --modal-safe-inset-top: 1rem;
+  --modal-safe-inset-right: 1rem;
+  --modal-safe-inset-bottom: 1rem;
+  --modal-safe-inset-left: 1rem;
+}
+
+body.is-native .modal-layer.fixed.inset-0 {
   --modal-safe-inset-top: max(1rem, var(--poni-atas, var(--sat, 0px)));
   --modal-safe-inset-right: max(1rem, var(--poni-kanan, 0px));
   --modal-safe-inset-bottom: max(1rem, var(--poni-bawah, var(--sab, 0px)));
   --modal-safe-inset-left: max(1rem, var(--poni-kiri, 0px));
   padding: var(--modal-safe-inset-top) var(--modal-safe-inset-right)
-    var(--modal-safe-inset-bottom) var(--modal-safe-inset-left);
+    var(--modal-safe-inset-bottom) var(--modal-safe-inset-left) !important;
 }
 
-.modal-layer.fixed.inset-0.modal-fullscreen {
+body.is-native .modal-layer.fixed.inset-0.modal-fullscreen {
   --modal-safe-inset-top: var(--poni-atas, var(--sat, 0px));
   --modal-safe-inset-right: var(--poni-kanan, 0px);
   --modal-safe-inset-bottom: var(--poni-bawah, var(--sab, 0px));
   --modal-safe-inset-left: var(--poni-kiri, 0px);
-  padding: 0;
+  padding: 0 !important;
 }
 
 .modal-layer.fixed.inset-0 > .modal-panel-enter {
   max-height: calc(100dvh - var(--modal-safe-inset-top) - var(--modal-safe-inset-bottom));
+}
+
+body.is-native .toast-container-safe {
+  bottom: max(1rem, calc(var(--poni-bawah, var(--sab, env(safe-area-inset-bottom, 0px))) + 0.5rem)) !important;
 }
 
 @keyframes modal-overlay-in {

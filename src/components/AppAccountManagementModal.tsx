@@ -501,7 +501,7 @@ export default function AppAccountManagementModal({ onClose }: Props) {
   ];
   return createPortal(
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="modal-layer fixed inset-0 z-[2147483000] flex items-center justify-center bg-slate-950/60 p-3 sm:p-4">
-      <motion.div initial={{ opacity: 0, scale: 0.98, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="w-full max-w-4xl h-[min(46rem,calc(100dvh-1.5rem))] bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden flex flex-col">
+      <motion.div initial={{ opacity: 0, scale: 0.98, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="modal-panel-enter w-full max-w-4xl h-[min(46rem,calc(100dvh-1.5rem))] bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden flex flex-col">
         <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-4 border-b border-slate-200 dark:border-slate-700 shrink-0">
           <div>
             <div className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white">Manajemen Akun & Konfigurasi</div>
