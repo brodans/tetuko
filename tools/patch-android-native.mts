@@ -255,6 +255,8 @@ class TetukoForegroundService : Service() {
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    // START_STICKY meminta Android membuat ulang service setelah proses dibunuh.
+    // Eksekusi native Rust tetap berjalan ketika proses Tauri/WebView tersedia.
     when (intent?.action) {
       ACTION_STOP -> {
         releaseWakeLock()

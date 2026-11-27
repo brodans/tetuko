@@ -20,6 +20,7 @@ import { isTauriRuntime, syncNativeAutomation, setNativeScheduler } from '../lib
 import {
   isAndroidTetuko,
   requestAndroidNotificationPermission,
+  requestAndroidBatteryOptimization,
   startAndroidForegroundService,
   stopAndroidForegroundService,
 } from '../lib/androidNative';
@@ -163,6 +164,9 @@ function GlobalPresetSchedulerInner() {
     if (!isAndroidTetuko()) return;
     if (penjadwalAktif) {
       requestAndroidNotificationPermission();
+      // Minta pengecualian optimasi baterai saat pengguna mengaktifkan automasi.
+      // Android tetap menampilkan dialog sistem; aplikasi tidak dapat memaksa izin.
+      requestAndroidBatteryOptimization();
       startAndroidForegroundService(
         'TETUKO Automasi Aktif',
         'Scheduler presensi berjalan di latar belakang',
