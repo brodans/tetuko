@@ -1185,6 +1185,7 @@ async fn start_local_server() {
     }
 }
 
+#[cfg(desktop)]
 fn show_main_window(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();

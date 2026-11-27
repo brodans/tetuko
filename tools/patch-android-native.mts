@@ -72,13 +72,16 @@ const manifestPath = join(root, 'AndroidManifest.xml');
 if (existsSync(manifestPath)) {
   let manifest = readFileSync(manifestPath, 'utf8');
 
-  // Network security config & cleartext
-  if (!manifest.includes('networkSecurityConfig')) {
-    manifest = manifest.replace(/<application\b/, '<application android:networkSecurityConfig="@xml/network_security_config" android:usesCleartextTraffic="true"');
+  // Network security config & cleartext (hindari duplikat atribut)
+  if (/android:networkSecurityConfig\s*=/.test(manifest)) {
+    manifest = manifest.replace(/android:networkSecurityConfig="[^"]*"/, 'android:networkSecurityConfig="@xml/network_security_config"');
   } else {
-    if (!manifest.includes('usesCleartextTraffic')) {
-      manifest = manifest.replace(/<application\b/, '<application android:usesCleartextTraffic="true"');
-    }
+    manifest = manifest.replace(/<application\b/, '<application android:networkSecurityConfig="@xml/network_security_config"');
+  }
+  if (/android:usesCleartextTraffic\s*=/.test(manifest)) {
+    manifest = manifest.replace(/android:usesCleartextTraffic="[^"]*"/, 'android:usesCleartextTraffic="true"');
+  } else {
+    manifest = manifest.replace(/<application\b/, '<application android:usesCleartextTraffic="true"');
   }
 
   const permissions = [
