@@ -25,7 +25,23 @@ function decodeEntities(value: string): string {
 function parseSpreadsheet(blobText: string): Cell[][] {
   const xml = new DOMParser().parseFromString(blobText, 'application/xml');
   const rows = [...xml.getElementsByTagNameNS('*', 'Row')];
-  return rows.map(row => [...row.getElementsByTagNameNS('*', 'Data')].map(cell => decodeEntities(cell.textContent || '')));
+  if (rows.length) return rows.map(row => [...row.getElementsByTagNameNS('*', 'Data')].map(cell => decodeEntities(cell.textContent || '')));
+
+  // Fallback untuk CSV/HTML spreadsheet yang dikirim gateway tertentu.
+  const html = new DOMParser().parseFromString(blobText, 'text/html');
+  const htmlRows = [...html.querySelectorAll('tr')].map(row => [...row.querySelectorAll('th,td')].map(cell => cell.textContent?.trim() || ''));
+  if (htmlRows.length) return htmlRows;
+  return blobText.split(/\\r?\\n/).filter(Boolean).map(line => {
+    const cells: string[] = [];
+    let value = ''; let quoted = false;
+    for (const char of line) {
+      if (char === '"') quoted = !quoted;
+      else if (char === ',' && !quoted) { cells.push(value.trim()); value = ''; }
+      else value += char;
+    }
+    cells.push(value.trim());
+    return cells.map(cell => cell.replace(/^"|"$/g, '').replace(/""/g, '"'));
+  });
 }
 
 let workerConfigured = false;
@@ -106,12 +122,12 @@ export default function ReportDocumentPreview({ file, format }: ReportDocumentPr
 
   if (!file) return <div className="p-6 text-sm text-slate-500">Tidak ada dokumen.</div>;
 
-  const toolbar = <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
-    <div className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300"><FileText className="h-4 w-4 text-blue-500" /> {format === 'pdf' ? `PDF · Halaman ${page}/${pdfPages || '…'}` : 'Spreadsheet · pratinjau'}</div>
-    <div className="flex items-center gap-1.5">
+  const toolbar = <div className="flex shrink-0 flex-col gap-2 border-b border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+    <div className="flex min-w-0 items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300"><FileText className="h-4 w-4 shrink-0 text-blue-500" /> <span className="truncate">{format === 'pdf' ? `PDF · Halaman ${page}/${pdfPages || '…'}` : 'Spreadsheet · pratinjau'}</span></div>
+    <div className="flex w-full items-center gap-1.5 sm:w-auto">
       {format === 'pdf' && <><button type="button" onClick={() => setScale(v => Math.max(.7, v - .1))} className="rounded-lg border p-2" aria-label="Perkecil"><Minus className="h-4 w-4" /></button><span className="min-w-12 text-center text-xs">{Math.round(scale * 100)}%</span><button type="button" onClick={() => setScale(v => Math.min(2, v + .1))} className="rounded-lg border p-2" aria-label="Perbesar"><Plus className="h-4 w-4" /></button><button type="button" disabled={page <= 1} onClick={() => setPage(v => v - 1)} className="rounded-lg border p-2 disabled:opacity-40"><ChevronLeft className="h-4 w-4" /></button><button type="button" disabled={page >= pdfPages} onClick={() => setPage(v => v + 1)} className="rounded-lg border p-2 disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button></>}
-      <button type="button" onClick={() => void openExternal()} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60"><ExternalLink className="h-4 w-4" /> Buka</button>
-      <button type="button" onClick={() => void download()} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold"><Download className="h-4 w-4" /> Unduh</button>
+      <button type="button" onClick={() => void openExternal()} disabled={busy} className="ml-auto inline-flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60 sm:ml-0 sm:flex-none"><ExternalLink className="h-4 w-4" /> Buka</button>
+      <button type="button" onClick={() => void download()} disabled={busy} className="inline-flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold sm:flex-none"><Download className="h-4 w-4" /> Unduh</button>
     </div>
   </div>;
 

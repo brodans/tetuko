@@ -1608,15 +1608,6 @@ function PonorogoLaporanPage() {
               <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
                 <button
                   type="button"
-                  onClick={() => void handleSaveReport()}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 sm:px-3"
-                  aria-label="Simpan laporan"
-                >
-                  <Download className="h-4 w-4" />
-                  <span className="hidden sm:inline">Simpan</span>
-                </button>
-                <button
-                  type="button"
                   onClick={() => void toggleReportFullscreen()}
                   className="inline-flex items-center gap-1.5 bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
                   aria-label={reportModalFullscreen ? 'Keluar dari layar penuh' : 'Layar penuh'}
