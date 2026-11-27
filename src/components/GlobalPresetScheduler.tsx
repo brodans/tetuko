@@ -25,7 +25,6 @@ import {
 } from '../lib/androidNative';
 import { bacaTitik } from '../lib/lokasiTersimpan';
 import { getServerProfile, SERVER_PROFILES } from '../lib/serverProfiles';
-import { bacaSemuaPreset as bacaSemuaPresetLegacy, bacaSemuaStockFoto as bacaSemuaStockFotoLegacy } from '../lib/presetAutomasi';
 import { AUTOMATION_AVAILABLE } from '../lib/deployMode';
 import { kirimNotifikasiNative } from '../lib/notifikasi';
 import { loadAppAuthSession } from '../lib/appAuthSession';
@@ -181,7 +180,6 @@ function GlobalPresetSchedulerInner() {
       const appSession = loadAppAuthSession();
       const accountKey = (appSession?.user?.username || (appSession?.role === 'admin' ? 'admin' : 'user')).toLowerCase();
       const allUnifiedStock = await bacaSemuaStockFoto().catch(() => [] as any[]);
-      const legacyStockAll = await bacaSemuaStockFotoLegacy().catch(() => [] as any[]);
 
       const buildUnifiedStock = (presetList: PresetOtomatisasi[]) => {
         const ids = new Set<string>();
@@ -205,10 +203,6 @@ function GlobalPresetSchedulerInner() {
           const key = `${pid}::${uname}`;
           const unified = await bacaSemuaPreset(uname, pid).catch(() => [] as PresetOtomatisasi[]);
           const locations = await bacaTitik(uname, pid).catch(() => []);
-          let legacy: any[] = [];
-          if (profileMeta.mode === 'ponorogo-absensi') {
-            legacy = await bacaSemuaPresetLegacy(uname).catch(() => []);
-          }
           const isActiveCtx = !!username && uname === username && pid === serverProfileId;
           if (isActiveCtx) { void saveNativeSessionContext(pid, uname, activePegawaiAny).catch(() => {}); }
           const storedCtx = isActiveCtx ? null : await loadNativeSessionContext(pid, uname).catch(() => null);
@@ -236,15 +230,9 @@ function GlobalPresetSchedulerInner() {
               }
             : undefined;
 
-          const legacyStockMapped = (legacyStockAll as any[]).map((f: any) => ({ id: String(f.id), nama: String(f.nama || ''), dataUrl: String(f.dataUrl || '') }));
           const unifiedStockMapped = buildUnifiedStock(unified);
           const stockMap = new Map<string, any>();
-          if (profileMeta.mode === 'ponorogo-absensi') {
-            for (const f of legacyStockMapped) stockMap.set(String(f.id), f);
-            for (const f of unifiedStockMapped) stockMap.set(String(f.id), f);
-          } else {
-            for (const f of unifiedStockMapped) stockMap.set(String(f.id), f);
-          }
+          for (const f of unifiedStockMapped) stockMap.set(String(f.id), f);
           profilesPayload[key] = {
             profile_id: pid,
             mode: profileMeta.mode,
@@ -260,7 +248,7 @@ function GlobalPresetSchedulerInner() {
               id: String(l.id), nama: String(l.nama || ''), latitude: Number(l.latitude), longitude: Number(l.longitude),
             })),
             stock_photos: Array.from(stockMap.values()),
-            legacy_ponorogo_presets: legacy,
+            legacy_ponorogo_presets: [],
           };
         }
       }
