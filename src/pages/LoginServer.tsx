@@ -419,7 +419,7 @@ export default function BerandaPonorogo() {
       {/* Profile Photo Viewer Modal */}
       <AnimatePresence>
         {isProfilePhotoViewerOpen && (
-          <div className="modal-layer fixed inset-0 z-[150] flex items-center justify-center p-4">
+          <div className="modal-layer fixed inset-0 z-[150] flex items-center justify-center p-4" style={{ paddingTop: "max(1rem, var(--sat, env(safe-area-inset-top, 0px)))", paddingBottom: "max(1rem, var(--sab, env(safe-area-inset-bottom, 0px)))" }}>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsProfilePhotoViewerOpen(false)} className="absolute inset-0 bg-slate-950/80" />
             <motion.div initial={{ opacity: 0, scale: 0.95, y: 15 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 15 }} transition={{ type: 'spring', duration: 0.3 }} className="relative w-full max-w-sm bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800/80 overflow-hidden flex flex-col items-center text-center z-10">
               <div className="w-full flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-5">
@@ -458,7 +458,7 @@ export default function BerandaPonorogo() {
       {/* Image Cropper Modal */}
       <AnimatePresence>
         {isCropperOpen && (
-          <div className="modal-layer fixed inset-0 z-[160] flex items-center justify-center p-4">
+          <div className="modal-layer fixed inset-0 z-[160] flex items-center justify-center p-4" style={{ paddingTop: "max(1rem, var(--sat, env(safe-area-inset-top, 0px)))", paddingBottom: "max(1rem, var(--sab, env(safe-area-inset-bottom, 0px)))" }}>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-950/85" />
             <motion.div initial={{ opacity: 0, scale: 0.95, y: 15 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 15 }} className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800 z-10 flex flex-col items-center">
               <div className="w-full flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-3 mb-5">
@@ -485,7 +485,7 @@ export default function BerandaPonorogo() {
       {/* Modal Update IMEI / Device ID */}
       <AnimatePresence>
         {isUpdateImeiOpen && (
-          <div className="modal-layer fixed inset-0 z-[200] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="modal-layer fixed inset-0 z-[200] flex items-center justify-center p-4 overflow-y-auto" style={{ paddingTop: "max(1rem, var(--sat, env(safe-area-inset-top, 0px)))", paddingBottom: "max(1rem, var(--sab, env(safe-area-inset-bottom, 0px)))" }}>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} onClick={() => !imeiLoading && setIsUpdateImeiOpen(false)} className="absolute inset-0 bg-slate-950/70" />
             <motion.div initial={{ opacity: 0, scale: 0.97, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97, y: 8 }} transition={{ duration: 0.18, ease: 'easeOut' }} className="relative w-full max-w-md my-auto bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 z-10 max-h-[min(90vh,560px)] flex flex-col overflow-hidden" role="dialog" aria-modal="true">
               <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">

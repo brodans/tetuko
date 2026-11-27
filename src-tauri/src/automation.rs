@@ -344,21 +344,31 @@ async fn bkd_checktype_recorded(
     preset: &UnifiedPreset,
     tanggal: &str,
 ) -> bool {
-    let Some(ctx) = profile.bkd.as_ref() else {
-        return false;
-    };
     let gateway = if !profile.gateway_url.is_empty() {
         profile.gateway_url.clone()
     } else {
         "https://presensi.bkd.jatimprov.go.id/service".to_string()
     };
+    let (api_key, last_latlong, imei) = if let Some(ctx) = profile.bkd.as_ref() {
+        (ctx.api_key.clone(), ctx.last_latlong.clone(), ctx.imei.clone())
+    } else if let Some(p) = profile.ponorogo.as_ref() {
+        let imei = get_str(&p.pegawai, &["imei", "deviceId", "device_id", "emei", "sim_serial"]);
+        let mut lat = get_str(&p.config, &["latitude"]);
+        if lat.is_empty() { lat = get_str(&p.pegawai, &["latitude"]); }
+        let mut lon = get_str(&p.config, &["longitude"]);
+        if lon.is_empty() { lon = get_str(&p.pegawai, &["longitude"]); }
+        let ll = if !lat.is_empty() && !lon.is_empty() { format!("{},{}", lat, lon) } else { get_str(&p.pegawai, &["last_latlong", "lastLatLong"]) };
+        (get_str(&p.pegawai, &["api_key", "apiKey"]), ll, imei)
+    } else {
+        return false;
+    };
     let param = json!({
         "tgl": tanggal,
         "page": 1,
         "limit": 50,
-        "api_key": ctx.api_key,
-        "last_latlong": ctx.last_latlong,
-        "imei": ctx.imei,
+        "api_key": api_key,
+        "last_latlong": last_latlong,
+        "imei": imei,
     });
     let envelope = json!({
         "jsonrpc": 2,
@@ -869,6 +879,38 @@ async fn submit_ponorogo_unified(
         }
     }
 
+    // Pre-check server: hindari submit ganda jika sudah absen di server
+    if bkd_checktype_recorded(mgr, profile, preset, &tanggal).await {
+        let msg = format!(
+            "Sudah ada absensi {} hari ini di server, dilewati.",
+            preset_checktype_label(&preset.tipe)
+        );
+        {
+            let mut st = mgr.state.write().await;
+            let day = st.runtime.execution_log.entry(log_key.clone()).or_default();
+            day.insert(
+                preset.id.clone(),
+                ExecutionLogEntry {
+                    preset_id: preset.id.clone(),
+                    tanggal: tanggal.clone(),
+                    berhasil: true,
+                    pesan: Some(msg.clone()),
+                    eksekusi_pada: Utc::now().timestamp_millis(),
+                    lokasi_dipilih: None,
+                    foto_dipilih: None,
+                },
+            );
+        }
+        mgr.save().await;
+        send_notification(
+            app,
+            "ℹ️ Presensi Otomatis Dilewati",
+            &format!("{} — {}", preset.nama, msg),
+        )
+        .await;
+        return (true, msg);
+    }
+
     let qkey = format!("{}::{}::{}", profile_key, username, preset.id);
     let (foto_id, foto_data) = {
         let mut st = mgr.state.write().await;
@@ -1021,7 +1063,7 @@ async fn submit_ponorogo_unified(
         .send()
         .await;
 
-    let (ok, msg) = match resp {
+    let (mut ok, mut msg) = match resp {
         Ok(r) => {
             let status = r.status();
             let text = r.text().await.unwrap_or_default();
@@ -1161,6 +1203,32 @@ async fn submit_ponorogo_unified(
         }
         Err(e) => (false, format!("Gagal menghubungi server Ponorogo: {}", e)),
     };
+
+    // Post-verify: pastikan benar-benar tercatat di server
+    if ok {
+        if bkd_verify_checked_in(mgr, profile, preset, &tanggal).await {
+            if msg.trim().is_empty() || msg == "Respons submit diterima" {
+                msg = "Presensi berhasil dan tervalidasi di server.".to_string();
+            }
+        } else {
+            ok = false;
+            let lower = msg.to_ascii_lowercase();
+            if !(lower.contains("rentang")
+                || lower.contains("belum masuk")
+                || lower.contains("di luar")
+                || lower.contains("diluar")
+                || lower.contains("waktu"))
+            {
+                if msg.trim().is_empty() || msg.to_ascii_lowercase().contains("berhasil") {
+                    msg = "Presensi tidak terkonfirmasi di server (belum tercatat).".to_string();
+                } else {
+                    msg = format!("{} (belum terkonfirmasi/tercatat di server).", msg);
+                }
+            }
+        }
+    } else if msg.trim().is_empty() {
+        msg = "Presensi gagal / tidak masuk rentang waktu server.".to_string();
+    }
 
     let tanggal_for_event = date.format("%Y-%m-%d").to_string();
     let should_notify = {

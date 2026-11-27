@@ -444,7 +444,12 @@ async fn ep_proxy(State(state): State<Arc<AppState>>, req: Request) -> impl Into
         if is_hop_by_hop(&n)
             || matches!(
                 n.as_str(),
-                "origin" | "referer" | "x-presensi-ep-base" | "x-presensi-gateway"
+                "origin"
+                    | "referer"
+                    | "host"
+                    | "cookie"
+                    | "x-presensi-ep-base"
+                    | "x-presensi-gateway"
             )
         {
             continue;
@@ -1148,6 +1153,7 @@ fn build_router(state: Arc<AppState>) -> Router {
 async fn start_local_server() {
     let client = match reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
+        .cookie_store(true)
         .build()
     {
         Ok(c) => c,

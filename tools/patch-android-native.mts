@@ -49,6 +49,13 @@ const put = (file: string, content: string) => { mkdirSync(dirname(file), { recu
 
 // Splash
 put(join(resDir, 'drawable/splash_screen.xml'), `<layer-list xmlns:android="http://schemas.android.com/apk/res/android"><item android:drawable="@color/splash_background"/><item><bitmap android:gravity="center" android:src="@drawable/splash_icon" /></item></layer-list>\n`);
+// Monochrome notification small icon (white silhouette)
+put(join(resDir, 'drawable/ic_tetuko_notif.xml'), `<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+  <path android:fillColor="#FFFFFFFF" android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM16.5,8.5h-3v8h-3v-8h-3v-2.5h9v2.5z"/>
+</vector>
+`);
 put(join(resDir, 'values/colors.xml'), `<?xml version="1.0" encoding="utf-8"?>
 <resources>
   <color name="splash_background">#F8FAFC</color>
@@ -249,7 +256,7 @@ class TetukoForegroundService : Service() {
     return NotificationCompat.Builder(this, CHANNEL_ID)
       .setContentTitle(title)
       .setContentText(content)
-      .setSmallIcon(R.mipmap.ic_launcher)
+      .setSmallIcon(R.drawable.ic_tetuko_notif)
       .setOngoing(true)
       .setOnlyAlertOnce(true)
       .setContentIntent(pendingOpen)
@@ -341,7 +348,7 @@ object TetukoNotificationHelper {
     val notif = NotificationCompat.Builder(ctx, CHANNEL_ID)
       .setContentTitle(title)
       .setContentText(message)
-      .setSmallIcon(R.mipmap.ic_launcher)
+      .setSmallIcon(R.drawable.ic_tetuko_notif)
       .setAutoCancel(true)
       .setPriority(NotificationCompat.PRIORITY_DEFAULT)
       .build()
@@ -605,7 +612,50 @@ class MainActivity : TauriActivity() {
 `);
 console.log('✅ MainActivity.kt ditulis');
 
-// ── Patch build.gradle.kts for release signing ─────────────────────────────
+// ── ProGuard rules ─────────────────────────────────────────────────────────
+const proguardPath = join(process.cwd(), 'src-tauri', 'gen', 'android', 'app', 'proguard-rules.pro');
+put(proguardPath, `# TETUKO Android ProGuard
+-dontobfuscate
+-optimizations !code/simplification/arithmetic,!field/*,!class/merging/*
+
+# Tauri / Wry / Rust JNI
+-keep class app.tauri.** { *; }
+-keep class * extends app.tauri.plugin.Plugin { *; }
+-keepclassmembers class * extends app.tauri.plugin.Plugin { *; }
+-keep @app.tauri.annotation.* class * { *; }
+-keepclassmembers class * { @app.tauri.annotation.* <methods>; }
+
+# WebView JS interface
+-keepattributes JavascriptInterface
+-keepclassmembers class * { @android.webkit.JavascriptInterface <methods>; }
+
+# TETUKO native classes
+-keep class id.tetuko.app.** { *; }
+
+# AndroidX / WorkManager / Kotlin
+-keep class androidx.work.** { *; }
+-keep class androidx.core.** { *; }
+-keep class kotlin.** { *; }
+-keep class kotlinx.** { *; }
+
+# Keep native methods
+-keepclasseswithmembernames class * { native <methods>; }
+
+# Keep enums
+-keepclassmembers enum * { public static **[] values(); public static ** valueOf(java.lang.String); }
+
+# Keep parcelables/serializable
+-keepclassmembers class * implements android.os.Parcelable { public static final ** CREATOR; }
+-keepclassmembers class * implements java.io.Serializable { *; }
+
+# OkHttp/Rustls/tls are in Rust side, but keep common attrs
+-keepattributes Signature,InnerClasses,EnclosingMethod,*Annotation*
+-dontwarn javax.annotation.**
+-dontwarn org.conscrypt.**
+`);
+console.log('✅ proguard-rules.pro ditulis');
+
+// ── Patch build.gradle.kts for release signing + minify ─────────────────────
 const gradlePath = join(process.cwd(), 'src-tauri', 'gen', 'android', 'app', 'build.gradle.kts');
 if (existsSync(gradlePath)) {
   let gradle = readFileSync(gradlePath, 'utf8');
@@ -632,6 +682,24 @@ if (existsSync(gradlePath)) {
       '$1\n            signingConfig = signingConfigs.getByName("release")'
     );
   }
+  if (gradle.includes('isMinifyEnabled = false')) {
+    gradle = gradle.replace(/isMinifyEnabled\s*=\s*false/g, 'isMinifyEnabled = true');
+  }
+  if (gradle.includes('isShrinkResources = false')) {
+    gradle = gradle.replace(/isShrinkResources\s*=\s*false/g, 'isShrinkResources = true');
+  }
+  if (!gradle.includes('isMinifyEnabled = true')) {
+    gradle = gradle.replace(
+      /(getByName\("release"\)\s*\{[^\n]*\n)/,
+      '$1            isMinifyEnabled = true\n            isShrinkResources = true\n            proguardFiles(\n                getDefaultProguardFile("proguard-android-optimize.txt"),\n                "proguard-rules.pro"\n            )\n'
+    );
+  }
+  if (!gradle.includes('proguard-rules.pro')) {
+    gradle = gradle.replace(
+      /(getByName\("release"\)\s*\{)/,
+      '$1\n            proguardFiles(\n                getDefaultProguardFile("proguard-android-optimize.txt"),\n                "proguard-rules.pro"\n            )'
+    );
+  }
   if (!gradle.includes('manifestPlaceholders["usesCleartextTraffic"]')) {
     gradle = gradle.replace(
       /(defaultConfig\s*\{)/,
@@ -639,7 +707,7 @@ if (existsSync(gradlePath)) {
     );
   }
   writeFileSync(gradlePath, gradle);
-  console.log('✅ build.gradle.kts dipatch untuk signing release');
+  console.log('✅ build.gradle.kts dipatch untuk signing release + minify');
 }
 
 console.log('✅ Patch Android native TETUKO selesai');
