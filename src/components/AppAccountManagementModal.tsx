@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { X, Users, Shield, Server, Save, Plus, Edit3, Trash2, Eye, EyeOff, Loader2, CheckCircle2, AlertCircle, KeyRound, ChevronDown, RefreshCw, Smartphone, Check } from 'lucide-react';
 import { SERVER_PROFILES, type ServerProfileId } from '../lib/serverProfiles';
-import { loadServerCreds, saveServerCreds, deleteServerCreds } from '../lib/loginCredsStore';
+import { loadAllServerCreds, saveServerCreds, deleteServerCreds, type SavedServerCreds } from '../lib/loginCredsStore';
 import { ambilImei, login as webLogin, muatCaptcha, setWebPresensiEpBase } from '../lib/webPresensi';
 import {
   fetchAllAppUsers, createAppUser, updateAppUser, deleteAppUser,
@@ -330,13 +330,25 @@ function ServerCredsTab() {
   const [targetUser, setTargetUser] = useState<string>('admin');
   const [userList, setUserList] = useState<string[]>(['admin']);
   const [imei, setImei] = useState<Record<string, ImeiState>>({});
+  const [accountsByProfile, setAccountsByProfile] = useState<Record<string, SavedServerCreds[]>>({});
+  const [selectedNipByProfile, setSelectedNipByProfile] = useState<Record<string, string>>({});
   const captchaBlobRef = useRef<Record<string, Blob | null>>({});
 
   const load = async (account = targetUser) => {
-    const entries = await Promise.all(SERVER_PROFILES.map(async p => [p.id, await loadServerCreds(p.id as ServerProfileId, account)] as const));
-    const next: any = {};
-    for (const [id, c] of entries) next[id] = { nip: c?.nip || '', password: c?.password || '', imei: c?.imei || '' };
-    setForms(next);
+    const entries = await Promise.all(SERVER_PROFILES.map(async p => [p.id, await loadAllServerCreds(p.id as ServerProfileId, account)] as const));
+    const nextAccounts: Record<string, SavedServerCreds[]> = {};
+    const nextForms: Record<string, { nip: string; password: string; imei: string }> = {};
+    const nextSel: Record<string, string> = {};
+    for (const [id, list] of entries) {
+      nextAccounts[id] = list;
+      const sel = selectedNipByProfile[id];
+      const picked = (sel && list.find(a => a.nip === sel)) || list[0] || null;
+      nextSel[id] = picked?.nip || '';
+      nextForms[id] = { nip: picked?.nip || '', password: picked?.password || '', imei: picked?.imei || '' };
+    }
+    setAccountsByProfile(nextAccounts);
+    setSelectedNipByProfile(prev => ({ ...prev, ...nextSel }));
+    setForms(nextForms);
   };
 
   useEffect(() => { (async () => { try { const u = await fetchAllAppUsers(); const a = await getAdminAuth(); setUserList([a.adminUsername || 'admin', ...u.map(x => x.username)]); } catch {} })(); }, []);
@@ -356,18 +368,38 @@ function ServerCredsTab() {
     setImei(prev => ({ ...prev, [id]: { open: false, loading: false, busy: false, url: null, text: '', info: '', error: '' } }));
   };
 
+  const pickAccount = (id: string, nip: string) => {
+    setSelectedNipByProfile(prev => ({ ...prev, [id]: nip }));
+    const list = accountsByProfile[id] || [];
+    const picked = list.find(a => a.nip === nip);
+    if (picked) setForms(prev => ({ ...prev, [id]: { nip: picked.nip, password: picked.password, imei: picked.imei || '' } }));
+    else setForms(prev => ({ ...prev, [id]: { nip: '', password: '', imei: '' } }));
+    closeImei(id);
+    setErr(e => ({ ...e, [id]: '' })); setMsg(m => ({ ...m, [id]: '' }));
+  };
+
   const save = async (id: ServerProfileId) => {
     setBusy(id); setMsg(m=>({...m,[id]:''})); setErr(e=>({...e,[id]:''}));
     try {
       const f = forms[id] || { nip:'',password:'',imei:'' };
       if (!f.nip.trim() || !f.password) { setErr(e=>({...e,[id]:'NIP/username dan password wajib diisi.'})); return; }
       await saveServerCreds(id, { nip: f.nip.trim(), password: f.password, imei: f.imei?.trim() || undefined }, targetUser);
+      setSelectedNipByProfile(prev => ({ ...prev, [id]: f.nip.trim() }));
+      await load(targetUser);
       setMsg(m=>({...m,[id]:`Kredensial tersimpan (terenkripsi) untuk @${targetUser}.`}));
     } catch (e:any) { setErr(er=>({...er,[id]: e?.message || 'Gagal menyimpan.'})); } finally { setBusy(null); }
   };
   const del = async (id: ServerProfileId) => {
     setBusy(id); setMsg(m=>({...m,[id]:''})); setErr(e=>({...e,[id]:''}));
-    try { await deleteServerCreds(id, targetUser); setForms(p=>({...p,[id]:{nip:'',password:'',imei:''}})); setMsg(m=>({...m,[id]:`Kredensial dihapus untuk @${targetUser}.`})); closeImei(id); }
+    try {
+      const f = forms[id] || { nip:'',password:'',imei:'' };
+      const nip = f.nip.trim();
+      if (nip) await deleteServerCreds(id, targetUser, nip);
+      else await deleteServerCreds(id, targetUser);
+      closeImei(id);
+      await load(targetUser);
+      setMsg(m=>({...m,[id]:`Kredensial dihapus untuk @${targetUser}.`}));
+    }
     catch (e:any) { setErr(er=>({...er,[id]: e?.message || 'Gagal menghapus.'})); } finally { setBusy(null); }
   };
 
@@ -412,6 +444,8 @@ function ServerCredsTab() {
       if (!got) throw new Error('IMEI tidak ditemukan dari server. Pastikan akun/perangkat terdaftar lalu coba lagi.');
       setF(id, { imei: got });
       await saveServerCreds(id, { nip: f.nip.trim(), password: f.password, imei: got }, targetUser);
+      setSelectedNipByProfile(prev => ({ ...prev, [id]: f.nip.trim() }));
+      await load(targetUser);
       setI(id, { busy: false, info: 'IMEI berhasil diambil dan disimpan (terenkripsi).' });
       setMsg(m => ({ ...m, [id]: `IMEI berhasil diambil & tersimpan untuk @${targetUser}.` }));
     } catch (e: any) {
@@ -428,30 +462,52 @@ function ServerCredsTab() {
   return (
     <div className="space-y-4">
       <div>
-        <div className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2"><Server className="w-4 h-4 text-blue-500" /> Kredensial Server Presensi per Akun</div>
+        <div className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2"><Server className="w-4 h-4 text-blue-500" /> Kredensial Server Presensi</div>
+        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Simpan kredensial per server (Jatim, Madiun, Ponorogo). Anda bisa menambah beberapa akun per server.</p>
       </div>
       <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-        <label className="text-xs font-bold text-slate-600 dark:text-slate-300 shrink-0">Akun:</label>
-        <CustomSelect value={targetUser} options={accountOptions} onChange={(v) => { setTargetUser(v); }} />
-        <div className="text-[11px] text-slate-500">Kredensial milik akun terpilih.</div>
+        <label className="text-xs font-bold text-slate-600 dark:text-slate-300 shrink-0">Akun Aplikasi:</label>
+        <CustomSelect value={targetUser} options={accountOptions} onChange={(v) => { setTargetUser(v); setSelectedNipByProfile({}); }} />
       </div>
       <div className="grid grid-cols-1 gap-3">
         {SERVER_PROFILES.map(p => {
           const f = forms[p.id] || { nip:'',password:'',imei:'' };
           const isBkd = p.mode === 'bkd-rpc';
           const im = imei[p.id] || { open: false, loading: false, busy: false, url: null, text: '', info: '', error: '' };
+          const savedList = accountsByProfile[p.id] || [];
+          const selectedNip = selectedNipByProfile[p.id] || '';
           return (
             <div key={p.id} className="rounded-2xl border border-slate-200 dark:border-slate-700 p-4 space-y-3 bg-slate-50/60 dark:bg-slate-900/30">
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                 <div>
                   <div className="font-bold text-sm text-slate-800 dark:text-slate-100">{PROFILE_LABELS[p.id as ServerProfileId]}</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">{savedList.length} akun tersimpan</div>
                 </div>
-                {isBkd && (
-                  <button type="button" onClick={() => im.open ? closeImei(p.id) : void openImei(p.id as ServerProfileId)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-800/50 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900/40">
-                    <Smartphone className="w-3.5 h-3.5" /> {im.open ? 'Tutup Ambil IMEI' : 'Ambil IMEI'}
+                <div className="flex flex-wrap items-center gap-2">
+                  {isBkd && (
+                    <button type="button" onClick={() => im.open ? closeImei(p.id) : void openImei(p.id as ServerProfileId)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-800/50 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900/40">
+                      <Smartphone className="w-3.5 h-3.5" /> {im.open ? 'Tutup Ambil IMEI' : 'Ambil IMEI'}
+                    </button>
+                  )}
+                  <button type="button" onClick={() => pickAccount(p.id, '')} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-700">
+                    <Plus className="w-3.5 h-3.5" /> Tambah Akun
                   </button>
-                )}
+                </div>
               </div>
+
+              {savedList.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {savedList.map(acc => {
+                    const active = acc.nip === selectedNip;
+                    return (
+                      <button key={acc.nip} type="button" onClick={() => pickAccount(p.id, acc.nip)} className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                        {acc.nip}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div><label className="block text-[11px] font-bold text-slate-500 mb-1">NIP / Username</label><input value={f.nip} onChange={e=>setF(p.id,{nip:e.target.value})} className={inp} placeholder="NIP/username" /></div>
                 <div><label className="block text-[11px] font-bold text-slate-500 mb-1">Password</label><div className="relative"><input type={show[p.id] ? 'text':'password'} value={f.password} onChange={e=>setF(p.id,{password:e.target.value})} className={inp + ' pr-10'} placeholder="Password" /><button type="button" onClick={()=>setShow(s=>({...s,[p.id]:!s[p.id]}))} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400">{show[p.id]?<EyeOff className="w-4 h-4"/>:<Eye className="w-4 h-4"/>}</button></div></div>
