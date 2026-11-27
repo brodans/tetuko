@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Download, ExternalLink, FileSpreadsheet, FileText, Loader2, Minus, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, ExternalLink, FileText, Loader2, Minus, Plus } from 'lucide-react';
 import { saveBlobSmart, saveBlobToCacheAndOpen } from '../../lib/nativeSave';
 import { isAndroidTetuko as isAndroidBridge, openReportOnAndroid } from '../../lib/androidNative';
 import { isTauriRuntime } from '../../lib/nativeAutomation';
@@ -22,6 +22,13 @@ function filenameOf(file: Blob, format: 'pdf' | 'xls') {
 function decodeEntities(value: string): string {
   const area = document.createElement('textarea'); area.innerHTML = value; return area.value;
 }
+function decodeSpreadsheetBytes(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) return new TextDecoder('utf-16le').decode(bytes.subarray(2));
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) return new TextDecoder('utf-16be').decode(bytes.subarray(2));
+  if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) return new TextDecoder('utf-8').decode(bytes.subarray(3));
+  return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+}
 function parseSpreadsheet(blobText: string): Cell[][] {
   const xml = new DOMParser().parseFromString(blobText, 'application/xml');
   const rows = [...xml.getElementsByTagNameNS('*', 'Row')];
@@ -31,12 +38,13 @@ function parseSpreadsheet(blobText: string): Cell[][] {
   const html = new DOMParser().parseFromString(blobText, 'text/html');
   const htmlRows = [...html.querySelectorAll('tr')].map(row => [...row.querySelectorAll('th,td')].map(cell => cell.textContent?.trim() || ''));
   if (htmlRows.length) return htmlRows;
+  const delimiter = (blobText.split(/\\r?\\n/)[0] || '').includes(';') ? ';' : ',';
   return blobText.split(/\\r?\\n/).filter(Boolean).map(line => {
     const cells: string[] = [];
     let value = ''; let quoted = false;
     for (const char of line) {
       if (char === '"') quoted = !quoted;
-      else if (char === ',' && !quoted) { cells.push(value.trim()); value = ''; }
+      else if (char === delimiter && !quoted) { cells.push(value.trim()); value = ''; }
       else value += char;
     }
     cells.push(value.trim());
@@ -72,7 +80,7 @@ export default function ReportDocumentPreview({ file, format }: ReportDocumentPr
   useEffect(() => {
     let cancelled = false;
     if (!file || format !== 'xls') { setSheetRows([]); return; }
-    file.text().then(text => { if (!cancelled) setSheetRows(parseSpreadsheet(text)); }).catch(() => { if (!cancelled) setSheetRows([]); });
+    file.arrayBuffer().then(buffer => { if (!cancelled) setSheetRows(parseSpreadsheet(decodeSpreadsheetBytes(buffer))); }).catch(() => { if (!cancelled) setSheetRows([]); });
     return () => { cancelled = true; };
   }, [file, format]);
 
@@ -133,5 +141,5 @@ export default function ReportDocumentPreview({ file, format }: ReportDocumentPr
 
   if (format === 'pdf') return <div className="flex min-h-0 flex-1 flex-col bg-slate-200 dark:bg-slate-950">{toolbar}<div className="min-h-0 flex-1 overflow-auto p-3 sm:p-6"><div className="mx-auto flex min-h-full w-fit items-start justify-center"><canvas ref={canvasRef} className="bg-white shadow-xl" />{!pdfPages && !pdfError && <Loader2 className="m-8 h-6 w-6 animate-spin text-slate-500" />}{pdfError && <div className="rounded-xl bg-white p-5 text-sm text-red-600">{pdfError}</div>}</div></div>{message && <div className="shrink-0 px-3 py-2 text-center text-xs text-rose-600">{message}</div>}</div>;
 
-  return <div className="flex min-h-0 flex-1 flex-col bg-slate-100 dark:bg-slate-950">{toolbar}<div className="min-h-0 flex-1 overflow-auto p-3 sm:p-5"><div className="mx-auto w-max min-w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900"><table className="border-collapse text-xs"><tbody>{sheetRows.length ? sheetRows.map((row, ri) => <tr key={ri} className={ri === 0 ? 'bg-emerald-50 font-bold dark:bg-emerald-950/30' : ''}>{row.map((cell, ci) => <td key={ci} className="max-w-[360px] border border-slate-200 px-3 py-2 align-top dark:border-slate-700">{cell}</td>)}</tr>) : <tr><td className="p-6 text-slate-500">Memuat spreadsheet…</td></tr>}</tbody></table></div></div>{message && <div className="shrink-0 px-3 py-2 text-center text-xs text-rose-600">{message}</div>}<div className="hidden"><FileSpreadsheet /></div></div>;
+  return <div className="flex min-h-0 flex-1 flex-col bg-slate-100 dark:bg-slate-950">{toolbar}<div className="min-h-0 flex-1 overflow-auto p-3 sm:p-5"><div className="mx-auto w-max min-w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900"><table className="border-collapse text-xs"><tbody>{sheetRows.length ? sheetRows.map((row, ri) => <tr key={ri} className={ri === 0 ? 'bg-emerald-50 font-bold dark:bg-emerald-950/30' : ''}>{row.map((cell, ci) => <td key={ci} className="max-w-[360px] whitespace-pre-wrap break-words border border-slate-200 px-3 py-2 align-top dark:border-slate-700">{cell}</td>)}</tr>) : <tr><td className="p-6 text-slate-500">Memuat spreadsheet…</td></tr>}</tbody></table></div></div>{message && <div className="shrink-0 px-3 py-2 text-center text-xs text-rose-600">{message}</div>}</div>;
 }
