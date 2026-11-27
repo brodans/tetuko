@@ -68,6 +68,9 @@ export default function ReportDocumentPreview({ file, format }: ReportDocumentPr
   const [scale, setScale] = useState(1);
   const [pdfError, setPdfError] = useState('');
   const [sheetRows, setSheetRows] = useState<Cell[][]>([]);
+  const [sheetName, setSheetName] = useState('');
+  const [sheetNames, setSheetNames] = useState<string[]>([]);
+  const [activeSheet, setActiveSheet] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isAndroid = android();
   const filename = filenameOf(file, format);
@@ -86,17 +89,27 @@ export default function ReportDocumentPreview({ file, format }: ReportDocumentPr
       if (cancelled) return;
       try {
         const workbook = XLSX.read(buffer, { type: 'array', cellText: true, cellDates: true });
-        const rows = workbook.SheetNames.flatMap(name => {
-          const sheet = workbook.Sheets[name];
-          const data = XLSX.utils.sheet_to_json<Cell[]>(sheet, { header: 1, defval: '', raw: false });
-          return data.length ? [[`▸ ${name}`], ...data] : [];
-        });
-        setSheetRows(rows.length ? rows : parseSpreadsheet(decodeSpreadsheetBytes(buffer)));
+        const names = workbook.SheetNames;
+        const name = names[0] || 'Sheet1';
+        const sheet = workbook.Sheets[name];
+        const data = XLSX.utils.sheet_to_json<Cell[]>(sheet, { header: 1, defval: '', raw: false });
+        setSheetNames(names); setActiveSheet(0); setSheetName(name);
+        setSheetRows(data.length ? data : parseSpreadsheet(decodeSpreadsheetBytes(buffer)));
       } catch {
         setSheetRows(parseSpreadsheet(decodeSpreadsheetBytes(buffer)));
       }
     }).catch(() => { if (!cancelled) setSheetRows([]); });
     return () => { cancelled = true; };
+  }, [file, format]);
+
+  const changeSheet = useCallback(async (index: number) => {
+    if (!file || format !== 'xls') return;
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: 'array', cellText: true, cellDates: true });
+    const name = workbook.SheetNames[index];
+    if (!name) return;
+    const rows = XLSX.utils.sheet_to_json<Cell[]>(workbook.Sheets[name], { header: 1, defval: '', raw: false });
+    setActiveSheet(index); setSheetName(name); setSheetRows(rows);
   }, [file, format]);
 
   useEffect(() => {
@@ -156,5 +169,5 @@ export default function ReportDocumentPreview({ file, format }: ReportDocumentPr
 
   if (format === 'pdf') return <div className="flex min-h-0 flex-1 flex-col bg-slate-200 dark:bg-slate-950">{toolbar}<div className="min-h-0 flex-1 overflow-auto p-3 sm:p-6"><div className="mx-auto flex min-h-full w-fit items-start justify-center"><canvas ref={canvasRef} className="bg-white shadow-xl" />{!pdfPages && !pdfError && <Loader2 className="m-8 h-6 w-6 animate-spin text-slate-500" />}{pdfError && <div className="rounded-xl bg-white p-5 text-sm text-red-600">{pdfError}</div>}</div></div>{message && <div className="shrink-0 px-3 py-2 text-center text-xs text-rose-600">{message}</div>}</div>;
 
-  return <div className="flex min-h-0 flex-1 flex-col bg-slate-100 dark:bg-slate-950">{toolbar}<div className="min-h-0 flex-1 overflow-auto p-3 sm:p-5"><div className="mx-auto w-max min-w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900"><table className="border-collapse text-xs"><tbody>{sheetRows.length ? sheetRows.map((row, ri) => <tr key={ri} className={row.length === 1 && String(row[0]).startsWith('▸') ? 'bg-emerald-100 font-extrabold dark:bg-emerald-950/50' : ri === 0 ? 'bg-emerald-50 font-bold dark:bg-emerald-950/30' : ''}>{row.map((cell, ci) => <td key={ci} className="min-w-[120px] max-w-[360px] whitespace-pre-wrap break-words border border-slate-200 px-3 py-2 align-top dark:border-slate-700">{cell}</td>)}</tr>) : <tr><td className="p-6 text-slate-500">Memuat spreadsheet…</td></tr>}</tbody></table></div></div>{message && <div className="shrink-0 px-3 py-2 text-center text-xs text-rose-600">{message}</div>}</div>;
+  return <div className="flex min-h-0 flex-1 flex-col bg-slate-100 dark:bg-slate-950">{toolbar}<div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">{sheetNames.map((name, index) => <button key={name} type="button" onClick={() => void changeSheet(index)} className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold ${index === activeSheet ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}>{name}</button>)}</div><div className="min-h-0 flex-1 overflow-auto p-3 sm:p-5"><div className="mx-auto w-max min-w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900"><div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">{sheetName || 'Spreadsheet'}</div><table className="border-collapse text-xs"><tbody>{sheetRows.length ? sheetRows.map((row, ri) => <tr key={ri} className={ri === 0 ? 'bg-emerald-50 font-bold dark:bg-emerald-950/30' : 'hover:bg-slate-50 dark:hover:bg-slate-800/60'}>{row.map((cell, ci) => <td key={ci} className="min-w-[120px] max-w-[360px] whitespace-pre-wrap break-words border border-slate-200 px-3 py-2 align-top dark:border-slate-700">{cell}</td>)}</tr>) : <tr><td className="p-6 text-slate-500">Memuat spreadsheet…</td></tr>}</tbody></table></div></div>{message && <div className="shrink-0 px-3 py-2 text-center text-xs text-rose-600">{message}</div>}</div>;
 }
