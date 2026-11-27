@@ -908,6 +908,24 @@ async fn submit_ponorogo_unified(
     if lon.is_empty() {
         lon = get_str(peg, &["longitude"]);
     }
+    let mut id_lokasi = get_str_or(
+        cfg,
+        &["idLokasi", "id_lokasi"],
+        &get_str(peg, &["idLokasi", "id_lokasi"]),
+    );
+    if !preset.lokasi_ids.is_empty() && !profile.locations.is_empty() {
+        let valid: Vec<&LocationPoint> = profile
+            .locations
+            .iter()
+            .filter(|l| preset.lokasi_ids.iter().any(|id| id == &l.id))
+            .collect();
+        if !valid.is_empty() {
+            let pick = valid[rand::thread_rng().gen_range(0..valid.len())];
+            id_lokasi = pick.id.clone();
+            lat = pick.latitude.to_string();
+            lon = pick.longitude.to_string();
+        }
+    }
     let lat_s = lat;
     let lon_s = lon;
     let latlong = if !lat_s.is_empty() && !lon_s.is_empty() {
@@ -952,14 +970,7 @@ async fn submit_ponorogo_unified(
                 &get_str(peg, &["kodeUnor", "kode_unor", "unor"]),
             ),
         ),
-        (
-            "id_lokasi".into(),
-            get_str_or(
-                cfg,
-                &["idLokasi", "id_lokasi"],
-                &get_str(peg, &["idLokasi", "id_lokasi"]),
-            ),
-        ),
+        ("id_lokasi".into(), id_lokasi.clone()),
         ("work_mode".into(), {
             let w = get_str(cfg, &["workMode", "work_mode"]);
             if w.is_empty() {
@@ -1164,7 +1175,7 @@ async fn submit_ponorogo_unified(
                 berhasil: ok,
                 pesan: Some(msg.clone()),
                 eksekusi_pada: Utc::now().timestamp_millis(),
-                lokasi_dipilih: None,
+                lokasi_dipilih: if id_lokasi.is_empty() { None } else { Some(id_lokasi.clone()) },
                 foto_dipilih: Some(foto_id.clone()),
             },
         );
@@ -1190,6 +1201,7 @@ async fn submit_ponorogo_unified(
             "tanggal": tanggal_for_event,
             "ok": ok,
             "message": msg,
+            "lokasi_dipilih": if id_lokasi.is_empty() { Value::Null } else { Value::String(id_lokasi.clone()) },
             "foto_dipilih": foto_id,
             "eksekusi_pada": Utc::now().timestamp_millis()
         }),

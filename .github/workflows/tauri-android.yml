@@ -35,8 +35,8 @@ jobs:
       VITE_JATIM_ID: ${{ secrets.VITE_JATIM_ID || vars.VITE_JATIM_ID || 'jatim' }}
       VITE_JATIM_NAME: ${{ secrets.VITE_JATIM_NAME || vars.VITE_JATIM_NAME || 'Provinsi Jawa Timur' }}
       VITE_JATIM_LABEL: ${{ secrets.VITE_JATIM_LABEL || vars.VITE_JATIM_LABEL || 'Presensi Jatimprov' }}
-      VITE_JATIM_GATEWAY_URL: ${{ secrets.VITE_JATIM_GATEWAY_URL || vars.VITE_JATIM_GATEWAY_URL || '' }}
-      VITE_JATIM_EP_BASE_URL: ${{ secrets.VITE_JATIM_EP_BASE_URL || vars.VITE_JATIM_EP_BASE_URL || '' }}
+      VITE_JATIM_GATEWAY_URL: ${{ secrets.VITE_JATIM_GATEWAY_URL || vars.VITE_JATIM_GATEWAY_URL || 'https://presensi.bkd.jatimprov.go.id/service' }}
+      VITE_JATIM_EP_BASE_URL: ${{ secrets.VITE_JATIM_EP_BASE_URL || vars.VITE_JATIM_EP_BASE_URL || 'https://presensi.bkd.jatimprov.go.id' }}
       VITE_JATIM_MODE: ${{ secrets.VITE_JATIM_MODE || vars.VITE_JATIM_MODE || 'bkd-rpc' }}
       VITE_JATIM_REQUIRES_PHOTO: ${{ secrets.VITE_JATIM_REQUIRES_PHOTO || vars.VITE_JATIM_REQUIRES_PHOTO || 'false' }}
       VITE_JATIM_REQUIRES_WORKCODE: ${{ secrets.VITE_JATIM_REQUIRES_WORKCODE || vars.VITE_JATIM_REQUIRES_WORKCODE || 'true' }}
@@ -45,8 +45,8 @@ jobs:
       VITE_MADIUN_ID: ${{ secrets.VITE_MADIUN_ID || vars.VITE_MADIUN_ID || 'madiun' }}
       VITE_MADIUN_NAME: ${{ secrets.VITE_MADIUN_NAME || vars.VITE_MADIUN_NAME || 'Kabupaten Madiun' }}
       VITE_MADIUN_LABEL: ${{ secrets.VITE_MADIUN_LABEL || vars.VITE_MADIUN_LABEL || 'Presensi Madiunkab' }}
-      VITE_MADIUN_GATEWAY_URL: ${{ secrets.VITE_MADIUN_GATEWAY_URL || vars.VITE_MADIUN_GATEWAY_URL || '' }}
-      VITE_MADIUN_EP_BASE_URL: ${{ secrets.VITE_MADIUN_EP_BASE_URL || vars.VITE_MADIUN_EP_BASE_URL || '' }}
+      VITE_MADIUN_GATEWAY_URL: ${{ secrets.VITE_MADIUN_GATEWAY_URL || vars.VITE_MADIUN_GATEWAY_URL || 'https://absen.madiunkab.go.id/service' }}
+      VITE_MADIUN_EP_BASE_URL: ${{ secrets.VITE_MADIUN_EP_BASE_URL || vars.VITE_MADIUN_EP_BASE_URL || 'https://presensimadiun.appdev.web.id' }}
       VITE_MADIUN_MODE: ${{ secrets.VITE_MADIUN_MODE || vars.VITE_MADIUN_MODE || 'bkd-rpc' }}
       VITE_MADIUN_REQUIRES_PHOTO: ${{ secrets.VITE_MADIUN_REQUIRES_PHOTO || vars.VITE_MADIUN_REQUIRES_PHOTO || 'false' }}
       VITE_MADIUN_REQUIRES_WORKCODE: ${{ secrets.VITE_MADIUN_REQUIRES_WORKCODE || vars.VITE_MADIUN_REQUIRES_WORKCODE || 'true' }}
@@ -55,13 +55,13 @@ jobs:
       VITE_PONOROGO_ID: ${{ secrets.VITE_PONOROGO_ID || vars.VITE_PONOROGO_ID || 'ponorogo' }}
       VITE_PONOROGO_NAME: ${{ secrets.VITE_PONOROGO_NAME || vars.VITE_PONOROGO_NAME || 'Kabupaten Ponorogo' }}
       VITE_PONOROGO_LABEL: ${{ secrets.VITE_PONOROGO_LABEL || vars.VITE_PONOROGO_LABEL || 'Presensi Ponorogo' }}
-      VITE_PONOROGO_GATEWAY_URL: ${{ secrets.VITE_PONOROGO_GATEWAY_URL || vars.VITE_PONOROGO_GATEWAY_URL || '' }}
-      VITE_PONOROGO_EP_BASE_URL: ${{ secrets.VITE_PONOROGO_EP_BASE_URL || vars.VITE_PONOROGO_EP_BASE_URL || '' }}
+      VITE_PONOROGO_GATEWAY_URL: ${{ secrets.VITE_PONOROGO_GATEWAY_URL || vars.VITE_PONOROGO_GATEWAY_URL || 'https://presensi.ponorogo.go.id/service' }}
+      VITE_PONOROGO_EP_BASE_URL: ${{ secrets.VITE_PONOROGO_EP_BASE_URL || vars.VITE_PONOROGO_EP_BASE_URL || 'https://presensi.ponorogo.go.id' }}
       VITE_PONOROGO_MODE: ${{ secrets.VITE_PONOROGO_MODE || vars.VITE_PONOROGO_MODE || 'ponorogo-absensi' }}
       VITE_PONOROGO_REQUIRES_PHOTO: ${{ secrets.VITE_PONOROGO_REQUIRES_PHOTO || vars.VITE_PONOROGO_REQUIRES_PHOTO || 'true' }}
       VITE_PONOROGO_REQUIRES_WORKCODE: ${{ secrets.VITE_PONOROGO_REQUIRES_WORKCODE || vars.VITE_PONOROGO_REQUIRES_WORKCODE || 'false' }}
-      VITE_PONOROGO_API_BASE: ${{ secrets.VITE_PONOROGO_API_BASE || vars.VITE_PONOROGO_API_BASE || '' }}
-      VITE_PONOROGO_IMAGE_BASE: ${{ secrets.VITE_PONOROGO_IMAGE_BASE || vars.VITE_PONOROGO_IMAGE_BASE || '' }}
+      VITE_PONOROGO_API_BASE: ${{ secrets.VITE_PONOROGO_API_BASE || vars.VITE_PONOROGO_API_BASE || 'http://103.109.206.102:8089/Ponorogo-absensApi/index.php' }}
+      VITE_PONOROGO_IMAGE_BASE: ${{ secrets.VITE_PONOROGO_IMAGE_BASE || vars.VITE_PONOROGO_IMAGE_BASE || 'http://103.109.206.102:8087' }}
 
       VITE_LOCAL_API_PORT: ${{ secrets.VITE_LOCAL_API_PORT || vars.VITE_LOCAL_API_PORT || '14200' }}
 
