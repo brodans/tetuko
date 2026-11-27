@@ -30,7 +30,7 @@ import { AUTOMATION_AVAILABLE } from '../lib/deployMode';
 import { kirimNotifikasiNative } from '../lib/notifikasi';
 import { loadAppAuthSession } from '../lib/appAuthSession';
 import { loadAllServerCreds } from '../lib/loginCredsStore';
-import { loadNativeSessionContext } from '../lib/nativeSessionContextStore';
+import { loadNativeSessionContext, saveNativeSessionContext } from '../lib/nativeSessionContextStore';
 import { syncAllCloudToLocal } from '../lib/cloudAutomationSync';
 
 const KUNCI_STORAGE_PENJADWAL = 'presensi_penjadwal_otomatis_aktif';
@@ -210,6 +210,7 @@ function GlobalPresetSchedulerInner() {
             legacy = await bacaSemuaPresetLegacy(uname).catch(() => []);
           }
           const isActiveCtx = !!username && uname === username && pid === serverProfileId;
+          if (isActiveCtx) { void saveNativeSessionContext(pid, uname, activePegawaiAny).catch(() => {}); }
           const storedCtx = isActiveCtx ? null : await loadNativeSessionContext(pid, uname).catch(() => null);
           const ctxAny = isActiveCtx ? activePegawaiAny : (storedCtx || {});
           const bkdCtx = {

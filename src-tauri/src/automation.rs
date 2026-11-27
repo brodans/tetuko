@@ -455,7 +455,7 @@ async fn send_notification(app: &AppHandle, title: &str, body: &str) {
     let payload = json!({"title": title, "body": body, "app": "TETUKO"});
     let _ = app.emit("tetuko://automation-notify", payload);
     // best effort native notification via plugin
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    #[cfg(not(target_os = "ios"))]
     {
         use tauri_plugin_notification::NotificationExt;
         if let Err(e) = app.notification().builder().title(title).body(body).show() {
@@ -746,9 +746,10 @@ async fn submit_bkd(
     }
 
     // write log
-    {
+    let should_notify = {
         let mut st = mgr.state.write().await;
         let day = st.runtime.execution_log.entry(log_key.clone()).or_default();
+        let prev_ok = day.get(&preset.id).map(|e| e.berhasil);
         day.insert(
             preset.id.clone(),
             ExecutionLogEntry {
@@ -765,14 +766,17 @@ async fn submit_bkd(
                 foto_dipilih: None,
             },
         );
-    }
+        ok || prev_ok != Some(false)
+    };
     mgr.save().await;
     let title = if ok {
         "✅ Presensi Otomatis Berhasil"
     } else {
         "⚠️ Presensi Otomatis Gagal"
     };
-    send_notification(app, title, &format!("{} — {}", preset.nama, msg)).await;
+    if should_notify {
+        send_notification(app, title, &format!("{} — {}", preset.nama, msg)).await;
+    }
     let _ = app.emit(
         "tetuko://automation-executed",
         json!({
@@ -1148,9 +1152,10 @@ async fn submit_ponorogo_unified(
     };
 
     let tanggal_for_event = date.format("%Y-%m-%d").to_string();
-    {
+    let should_notify = {
         let mut st = mgr.state.write().await;
         let day = st.runtime.execution_log.entry(log_key).or_default();
+        let prev_ok = day.get(&preset.id).map(|e| e.berhasil);
         day.insert(
             preset.id.clone(),
             ExecutionLogEntry {
@@ -1163,14 +1168,17 @@ async fn submit_ponorogo_unified(
                 foto_dipilih: Some(foto_id.clone()),
             },
         );
-    }
+        ok || prev_ok != Some(false)
+    };
     mgr.save().await;
     let title = if ok {
         "✅ Presensi Otomatis Berhasil"
     } else {
         "⚠️ Presensi Otomatis Gagal"
     };
-    send_notification(app, title, &format!("{} — {}", preset.nama, msg)).await;
+    if should_notify {
+        send_notification(app, title, &format!("{} — {}", preset.nama, msg)).await;
+    }
     let _ = app.emit(
         "tetuko://automation-executed",
         json!({
@@ -1293,10 +1301,16 @@ pub fn start_background(app: AppHandle, mgr: Arc<AutomationManager>) {
 
 #[tauri::command]
 pub async fn automation_sync(
+    app: tauri::AppHandle,
     state: tauri::State<'_, Arc<AutomationManager>>,
     payload: AutomationStateFile,
 ) -> Result<bool, String> {
-    state.merge_sync(payload).await;
+    let mgr = state.inner().clone();
+    mgr.merge_sync(payload).await;
+    let app2 = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tick(&app2, &mgr).await;
+    });
     Ok(true)
 }
 
@@ -1309,12 +1323,14 @@ pub async fn automation_get_state(
 
 #[tauri::command]
 pub async fn automation_set_scheduler(
+    app: tauri::AppHandle,
     state: tauri::State<'_, Arc<AutomationManager>>,
     profile_id: String,
     enabled: bool,
 ) -> Result<bool, String> {
+    let mgr = state.inner().clone();
     {
-        let mut st = state.state.write().await;
+        let mut st = mgr.state.write().await;
         let mut touched = false;
         // exact key
         if let Some(p) = st.profiles.get_mut(&profile_id) {
@@ -1340,6 +1356,12 @@ pub async fn automation_set_scheduler(
             );
         }
     }
-    state.save().await;
+    mgr.save().await;
+    if enabled {
+        let app2 = app.clone();
+        tauri::async_runtime::spawn(async move {
+            tick(&app2, &mgr).await;
+        });
+    }
     Ok(true)
 }
