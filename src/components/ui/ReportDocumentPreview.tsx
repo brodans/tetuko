@@ -5,6 +5,7 @@ import { isAndroidTetuko as isAndroidBridge, openReportOnAndroid } from '../../l
 import { isTauriRuntime } from '../../lib/nativeAutomation';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import pdfWorkerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
+import * as XLSX from 'xlsx';
 
 interface ReportDocumentPreviewProps { file: Blob; format: 'pdf' | 'xls'; }
 type Cell = string;
@@ -38,8 +39,9 @@ function parseSpreadsheet(blobText: string): Cell[][] {
   const html = new DOMParser().parseFromString(blobText, 'text/html');
   const htmlRows = [...html.querySelectorAll('tr')].map(row => [...row.querySelectorAll('th,td')].map(cell => cell.textContent?.trim() || ''));
   if (htmlRows.length) return htmlRows;
-  const delimiter = (blobText.split(/\\r?\\n/)[0] || '').includes(';') ? ';' : ',';
-  return blobText.split(/\\r?\\n/).filter(Boolean).map(line => {
+  const lines = blobText.replace(/^\uFEFF/, '').split(/\r?\n/).filter(Boolean);
+  const delimiter = (lines[0] || '').includes(';') ? ';' : ',';
+  return lines.map(line => {
     const cells: string[] = [];
     let value = ''; let quoted = false;
     for (const char of line) {
@@ -80,7 +82,20 @@ export default function ReportDocumentPreview({ file, format }: ReportDocumentPr
   useEffect(() => {
     let cancelled = false;
     if (!file || format !== 'xls') { setSheetRows([]); return; }
-    file.arrayBuffer().then(buffer => { if (!cancelled) setSheetRows(parseSpreadsheet(decodeSpreadsheetBytes(buffer))); }).catch(() => { if (!cancelled) setSheetRows([]); });
+    file.arrayBuffer().then(buffer => {
+      if (cancelled) return;
+      try {
+        const workbook = XLSX.read(buffer, { type: 'array', cellText: true, cellDates: true });
+        const rows = workbook.SheetNames.flatMap(name => {
+          const sheet = workbook.Sheets[name];
+          const data = XLSX.utils.sheet_to_json<Cell[]>(sheet, { header: 1, defval: '', raw: false });
+          return data.length ? [[`▸ ${name}`], ...data] : [];
+        });
+        setSheetRows(rows.length ? rows : parseSpreadsheet(decodeSpreadsheetBytes(buffer)));
+      } catch {
+        setSheetRows(parseSpreadsheet(decodeSpreadsheetBytes(buffer)));
+      }
+    }).catch(() => { if (!cancelled) setSheetRows([]); });
     return () => { cancelled = true; };
   }, [file, format]);
 
@@ -141,5 +156,5 @@ export default function ReportDocumentPreview({ file, format }: ReportDocumentPr
 
   if (format === 'pdf') return <div className="flex min-h-0 flex-1 flex-col bg-slate-200 dark:bg-slate-950">{toolbar}<div className="min-h-0 flex-1 overflow-auto p-3 sm:p-6"><div className="mx-auto flex min-h-full w-fit items-start justify-center"><canvas ref={canvasRef} className="bg-white shadow-xl" />{!pdfPages && !pdfError && <Loader2 className="m-8 h-6 w-6 animate-spin text-slate-500" />}{pdfError && <div className="rounded-xl bg-white p-5 text-sm text-red-600">{pdfError}</div>}</div></div>{message && <div className="shrink-0 px-3 py-2 text-center text-xs text-rose-600">{message}</div>}</div>;
 
-  return <div className="flex min-h-0 flex-1 flex-col bg-slate-100 dark:bg-slate-950">{toolbar}<div className="min-h-0 flex-1 overflow-auto p-3 sm:p-5"><div className="mx-auto w-max min-w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900"><table className="border-collapse text-xs"><tbody>{sheetRows.length ? sheetRows.map((row, ri) => <tr key={ri} className={ri === 0 ? 'bg-emerald-50 font-bold dark:bg-emerald-950/30' : ''}>{row.map((cell, ci) => <td key={ci} className="max-w-[360px] whitespace-pre-wrap break-words border border-slate-200 px-3 py-2 align-top dark:border-slate-700">{cell}</td>)}</tr>) : <tr><td className="p-6 text-slate-500">Memuat spreadsheet…</td></tr>}</tbody></table></div></div>{message && <div className="shrink-0 px-3 py-2 text-center text-xs text-rose-600">{message}</div>}</div>;
+  return <div className="flex min-h-0 flex-1 flex-col bg-slate-100 dark:bg-slate-950">{toolbar}<div className="min-h-0 flex-1 overflow-auto p-3 sm:p-5"><div className="mx-auto w-max min-w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900"><table className="border-collapse text-xs"><tbody>{sheetRows.length ? sheetRows.map((row, ri) => <tr key={ri} className={row.length === 1 && String(row[0]).startsWith('▸') ? 'bg-emerald-100 font-extrabold dark:bg-emerald-950/50' : ri === 0 ? 'bg-emerald-50 font-bold dark:bg-emerald-950/30' : ''}>{row.map((cell, ci) => <td key={ci} className="min-w-[120px] max-w-[360px] whitespace-pre-wrap break-words border border-slate-200 px-3 py-2 align-top dark:border-slate-700">{cell}</td>)}</tr>) : <tr><td className="p-6 text-slate-500">Memuat spreadsheet…</td></tr>}</tbody></table></div></div>{message && <div className="shrink-0 px-3 py-2 text-center text-xs text-rose-600">{message}</div>}</div>;
 }
