@@ -4,6 +4,7 @@ import { ApiTrafficEntry, subscribeToApiTraffic } from '../api';
 import { BP_INSPECTOR_SIDEBAR, useMediaQuery } from '../hooks/useMediaQuery';
 import { useToast } from './ui/Toast';
 import { saveBlobSmart } from '../lib/nativeSave';
+import { acquireNativeDarkOverlay } from '../lib/nativeSystemBars';
 
 const formatPayload = (value: unknown) => {
   if (value === undefined || value === null) return 'null';
@@ -177,6 +178,12 @@ export default function DeveloperInspector({
       window.removeEventListener('mouseup', handleStop);
     };
   }, [enabled, layarLebar]);
+
+  // Panel gelap fullscreen: paksa ikon status/nav bar Android tetap terang.
+  useEffect(() => {
+    if (!enabled || !mobileOpen) return;
+    return acquireNativeDarkOverlay();
+  }, [enabled, mobileOpen]);
 
   // Lock body scroll on mobile drawer active state
   useEffect(() => {

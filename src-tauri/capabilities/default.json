@@ -26,6 +26,7 @@
         { "path": "$DESKTOP/**" },
         { "path": "$APPDATA/**" },
         { "path": "$APPCONFIG/**" },
+        { "path": "$CACHE/**" },
         { "path": "$TEMP/**" }
       ]
     },

@@ -84,6 +84,15 @@ put(join(resDir, 'xml/network_security_config.xml'), `<?xml version="1.0" encodi
 </network-security-config>
 `);
 
+// FileProvider: berbagi berkas laporan (PDF/Excel/CSV) ke aplikasi eksternal
+put(join(resDir, 'xml/tetuko_file_paths.xml'), `<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+  <cache-path name="tetuko_cache" path="." />
+  <files-path name="tetuko_files" path="." />
+  <external-cache-path name="tetuko_external_cache" path="." />
+</paths>
+`);
+
 // ── Manifest patch ─────────────────────────────────────────────────────────
 const manifestPath = join(root, 'AndroidManifest.xml');
 if (existsSync(manifestPath)) {
@@ -156,6 +165,22 @@ if (existsSync(manifestPath)) {
         </receiver>
     </application>`;
     manifest = manifest.replace(/<\/application>/, serviceTag);
+  }
+
+  // FileProvider untuk membuka laporan via aplikasi eksternal (Chrome/PDF viewer)
+  if (!manifest.includes('androidx.core.content.FileProvider')) {
+    const providerTag = `
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="\${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/tetuko_file_paths" />
+        </provider>
+    </application>`;
+    manifest = manifest.replace(/<\/application>/, providerTag);
   }
 
   writeFileSync(manifestPath, manifest);
@@ -362,6 +387,7 @@ console.log('✅ TetukoNotificationHelper.kt ditulis');
 const activity = join(pkgDir, 'MainActivity.kt');
 put(activity, `package id.tetuko.app
 
+import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
@@ -371,12 +397,15 @@ import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
+import android.util.Base64
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import androidx.core.content.FileProvider
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import java.io.File
 
 class MainActivity : TauriActivity() {
 
@@ -449,6 +478,82 @@ class MainActivity : TauriActivity() {
         try { TetukoNotificationHelper.showNotification(this@MainActivity, title, message) } catch (e: Exception) { e.printStackTrace() }
       }
       return true
+    }
+
+    @JavascriptInterface
+    fun saveReportBase64(base64: String?, filename: String?, mime: String?): Boolean {
+      if (base64.isNullOrBlank()) return false
+      val bytes = try { Base64.decode(base64, Base64.DEFAULT) } catch (e: Exception) { return false }
+      val safeName = safeReportName(filename)
+      val mimeType = mime ?: "application/octet-stream"
+      mainHandler.post { writeBytesToDownloads(bytes, safeName, mimeType) }
+      return true
+    }
+
+    @JavascriptInterface
+    fun openReportBase64(base64: String?, filename: String?, mime: String?) {
+      if (base64.isNullOrBlank()) return
+      val bytes = try { Base64.decode(base64, Base64.DEFAULT) } catch (e: Exception) { return }
+      val safeName = safeReportName(filename)
+      val mimeType = mime ?: "application/octet-stream"
+      mainHandler.post {
+        try {
+          val dir = File(cacheDir, "laporan")
+          if (!dir.exists()) dir.mkdirs()
+          val file = File(dir, safeName)
+          file.writeBytes(bytes)
+          val uri = FileProvider.getUriForFile(this@MainActivity, "$packageName.fileprovider", file)
+          val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, mimeType)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+          }
+          startActivity(viewIntent)
+        } catch (e: Exception) {
+          e.printStackTrace()
+          // Tidak ada aplikasi pembuka (mis. CSV tanpa handler): simpan ke Unduhan.
+          writeBytesToDownloads(bytes, safeName, mimeType)
+        }
+      }
+    }
+  }
+
+  private fun safeReportName(filename: String?): String {
+    val base = (filename ?: "laporan.pdf").replace(Regex("[^A-Za-z0-9._-]"), "_")
+    return if (base.isBlank() || base == "." || base == "..") "laporan.pdf" else base
+  }
+
+  private fun writeBytesToDownloads(bytes: ByteArray, safeName: String, mimeType: String) {
+    try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val isImage = mimeType.startsWith("image/")
+        val collection = if (isImage) android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+          else android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI
+        val savedLabel = if (isImage) "Galeri" else "folder Unduhan"
+        val values = android.content.ContentValues().apply {
+          put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, safeName)
+          put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mimeType)
+          put(android.provider.MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val uri = contentResolver.insert(collection, values)
+        if (uri != null) {
+          contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+          val done = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.MediaColumns.IS_PENDING, 0)
+          }
+          contentResolver.update(uri, done, null, null)
+          TetukoNotificationHelper.showNotification(this, "Berkas tersimpan", safeName + " tersimpan di " + savedLabel + ".")
+        }
+      } else {
+        val dir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+        if (!dir.exists()) dir.mkdirs()
+        val file = File(dir, safeName)
+        file.writeBytes(bytes)
+        android.media.MediaScannerConnection.scanFile(this, arrayOf(file.absolutePath), arrayOf(mimeType), null)
+        TetukoNotificationHelper.showNotification(this, "Berkas tersimpan", safeName + " tersimpan di folder Unduhan.")
+      }
+    } catch (e: Exception) {
+      e.printStackTrace()
+      TetukoNotificationHelper.showNotification(this, "Gagal menyimpan", e.message ?: "Berkas tidak dapat disimpan.")
     }
   }
 

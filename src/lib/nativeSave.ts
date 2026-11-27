@@ -1,4 +1,5 @@
 import { bersihkanNamaBerkas } from './unduh';
+import { isAndroidTetuko, saveReportOnAndroid } from './androidNative';
 
 export function isTauriRuntime(): boolean {
   if (typeof window === 'undefined') return false;
@@ -105,6 +106,15 @@ export async function saveBlobSmart(options: {
 }): Promise<{ saved: boolean; path?: string; cancelled?: boolean }> {
   const { blob, filename, mimeHint, showToast, successMessage, onCancel } = options;
   if (isTauriRuntime()) {
+    // Android: simpan langsung ke folder Unduhan lewat MediaStore (tanpa SAF).
+    if (isAndroidTetuko()) {
+      const name = ensureExt(filename, mimeHint || blob.type);
+      const ok = await saveReportOnAndroid(blob, name, mimeHint || blob.type);
+      if (ok) {
+        showToast?.(successMessage || 'Berkas disimpan di folder Unduhan.', { durationMs: 6000 });
+        return { saved: true };
+      }
+    }
     try {
       const path = await saveBlobWithDialog(blob, filename, mimeHint || blob.type);
       if (!path) {
@@ -136,4 +146,28 @@ export async function saveBlobSmart(options: {
   URL.revokeObjectURL(url);
   showToast?.(successMessage || 'Berkas berhasil diunduh.', { durationMs: 5000 });
   return { saved: true };
+}
+
+export async function saveBlobToCacheAndOpen(blob: Blob, filename: string, mimeHint?: string): Promise<string | null> {
+  if (!isTauriRuntime()) return null;
+  const { writeFile, mkdir } = await import('@tauri-apps/plugin-fs');
+  const { cacheDir, join } = await import('@tauri-apps/api/path');
+  const { openPath } = await import('@tauri-apps/plugin-opener');
+  const name = ensureExt(filename, mimeHint || blob.type);
+  const dir = await cacheDir();
+  const folder = await join(dir, 'tetuko-reports');
+  try { await mkdir(folder, { recursive: true }); } catch {}
+  const path = await join(folder, name);
+  const bytes = await blobToUint8Array(blob);
+  await writeFile(path, bytes);
+  try {
+    await openPath(path);
+  } catch {
+    // Fallback: try opening as file URL via opener
+    try {
+      const { openUrl } = await import('@tauri-apps/plugin-opener');
+      await openUrl(path);
+    } catch {}
+  }
+  return path;
 }

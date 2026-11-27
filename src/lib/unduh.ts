@@ -10,6 +10,8 @@
  * Jadi keduanya memakai satu fungsi, dan PDF pun lewat sini.
  */
 
+import { isAndroidTetuko, openReportOnAndroid } from './androidNative';
+
 /** Karakter yang tidak boleh muncul di nama berkas. */
 const KARAKTER_NAMA = /[/\\:*?"<>|]/g;
 
@@ -36,8 +38,7 @@ export function unduhTeks(namaBerkas: string, isi: string, mime: string): void {
   unduhBlob(namaBerkas, new Blob([isi], { type: mime + ';charset=utf-8;' }));
 }
 
-/** Unduh `Blob` apa pun sebagai berkas  dipakai juga oleh PDF. */
-export function unduhBlob(namaBerkas: string, blob: Blob): void {
+function unduhBlobViaAnchor(namaBerkas: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -47,4 +48,22 @@ export function unduhBlob(namaBerkas: string, blob: Blob): void {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Unduh `Blob` apa pun sebagai berkas  dipakai juga oleh PDF.
+ *
+ * Di Android (WebView Tauri) tautan `download` tidak ditangani, sehingga berkas
+ * tidak pernah muncul. Jika bridge native tersedia, berkas dibuka lewat
+ * aplikasi eksternal (Chrome/PDF viewer/Excel) yang juga bisa menyimpannya.
+ */
+export function unduhBlob(namaBerkas: string, blob: Blob): void {
+  const nama = bersihkanNamaBerkas(namaBerkas);
+  if (isAndroidTetuko()) {
+    void openReportOnAndroid(blob, nama, blob.type).then((ok) => {
+      if (!ok) unduhBlobViaAnchor(nama, blob);
+    });
+    return;
+  }
+  unduhBlobViaAnchor(nama, blob);
 }
