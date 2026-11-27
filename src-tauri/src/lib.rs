@@ -9,7 +9,9 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{net::SocketAddr, sync::Arc};
-use tauri::{Emitter, Manager};
+use tauri::Manager;
+#[cfg(desktop)]
+use tauri::Emitter;
 #[cfg(desktop)]
 use tauri::{
     menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
@@ -1186,6 +1188,7 @@ async fn start_local_server() {
 fn show_main_window(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
+        #[cfg(desktop)]
         let _ = w.unminimize();
         let _ = w.set_focus();
         #[cfg(desktop)]
@@ -1399,6 +1402,7 @@ fn set_autostart_enabled(_enabled: bool) -> Result<bool, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
