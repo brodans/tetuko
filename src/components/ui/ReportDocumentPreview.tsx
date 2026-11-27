@@ -24,6 +24,25 @@ function filenameOf(file: Blob, format: 'pdf' | 'xls') {
 function decodeEntities(value: string): string {
   const area = document.createElement('textarea'); area.innerHTML = value; return area.value;
 }
+function formatCellValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (value instanceof Date) return value.toLocaleDateString('id-ID');
+  if (typeof value === 'number') return Number.isInteger(value) ? String(value) : value.toLocaleString('id-ID', { maximumFractionDigits: 12 });
+  return String(value);
+}
+function readSheetRows(sheet: XLSX.WorkSheet): Cell[][] {
+  const range = sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref']) : { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } };
+  const rows: Cell[][] = [];
+  for (let r = range.s.r; r <= range.e.r; r += 1) {
+    const row: Cell[] = [];
+    for (let c = range.s.c; c <= range.e.c; c += 1) {
+      const cell = sheet[XLSX.utils.encode_cell({ r, c })] as (XLSX.CellObject & { w?: string }) | undefined;
+      row.push(cell?.w ?? formatCellValue(cell?.v));
+    }
+    rows.push(row);
+  }
+  return rows;
+}
 function decodeSpreadsheetBytes(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   if (bytes[0] === 0xff && bytes[1] === 0xfe) return new TextDecoder('utf-16le').decode(bytes.subarray(2));
@@ -94,8 +113,7 @@ export default function ReportDocumentPreview({ file, format }: ReportDocumentPr
         const names = workbook.SheetNames;
         const name = names[0] || 'Sheet1';
         const sheet = workbook.Sheets[name];
-        const range = sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref']) : undefined;
-        const data = XLSX.utils.sheet_to_json<Cell[]>(sheet, { header: 1, range, defval: '', raw: false });
+        const data = readSheetRows(sheet);
         setSheetNames(names); setActiveSheet(0); setSheetName(name);
         setSheetMerges((sheet['!merges'] || []).map((merge: XLSX.Range) => ({ row: merge.s.r, col: merge.s.c, rowSpan: merge.e.r - merge.s.r + 1, colSpan: merge.e.c - merge.s.c + 1 })));
         setSheetRows(data.length ? data : parseSpreadsheet(decodeSpreadsheetBytes(buffer)));
@@ -113,8 +131,7 @@ export default function ReportDocumentPreview({ file, format }: ReportDocumentPr
     const name = workbook.SheetNames[index];
     if (!name) return;
     const selectedSheet = workbook.Sheets[name];
-    const range = selectedSheet['!ref'] ? XLSX.utils.decode_range(selectedSheet['!ref']) : undefined;
-    const rows = XLSX.utils.sheet_to_json<Cell[]>(selectedSheet, { header: 1, range, defval: '', raw: false });
+    const rows = readSheetRows(selectedSheet);
     setActiveSheet(index); setSheetName(name);
     setSheetMerges((workbook.Sheets[name]['!merges'] || []).map((merge: XLSX.Range) => ({ row: merge.s.r, col: merge.s.c, rowSpan: merge.e.r - merge.s.r + 1, colSpan: merge.e.c - merge.s.c + 1 })));
     setSheetRows(rows);
