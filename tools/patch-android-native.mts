@@ -49,6 +49,16 @@ const put = (file: string, content: string) => { mkdirSync(dirname(file), { recu
 
 // Splash
 put(join(resDir, 'drawable/splash_screen.xml'), `<layer-list xmlns:android="http://schemas.android.com/apk/res/android"><item android:drawable="@color/splash_background"/><item><bitmap android:gravity="center" android:src="@drawable/splash_icon" /></item></layer-list>\n`);
+put(join(resDir, 'values/colors.xml'), `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <color name="splash_background">#F8FAFC</color>
+</resources>
+`);
+put(join(resDir, 'values-night/colors.xml'), `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <color name="splash_background">#0B1120</color>
+</resources>
+`);
 
 // Network security config: izinkan cleartext ke localhost/127.0.0.1 untuk proxy lokal TETUKO
 put(join(resDir, 'xml/network_security_config.xml'), `<?xml version="1.0" encoding="utf-8"?>
