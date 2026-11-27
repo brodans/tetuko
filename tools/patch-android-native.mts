@@ -11,9 +11,14 @@ if (!existsSync(root)) {
 }
 
 // ── Regenerate Android mipmap icons dari icon TETUKO ───────────────────────
-const iconSrc = join(process.cwd(), 'src-tauri', 'icons', 'icon.png');
+// icon-android.png = artwork yang sudah diberi margin aman adaptive icon
+// (badge ±62% kanvas) supaya tidak terpotong mask launcher Android.
+const brandIconSrc = join(process.cwd(), 'src-tauri', 'icons', 'icon.png');
+const androidIconSrc = join(process.cwd(), 'src-tauri', 'icons', 'icon-android.png');
+const iconSrc = existsSync(androidIconSrc) ? androidIconSrc : brandIconSrc;
 const iconOut = join(tmpdir(), 'tauri-icons-' + randomBytes(4).toString('hex'));
 const resDir = join(root, 'res');
+const put = (file: string, content: string) => { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, content); };
 
 if (existsSync(iconSrc)) {
   console.log('🎨 Generating Android icons dari icon TETUKO...');
@@ -34,18 +39,30 @@ if (existsSync(iconSrc)) {
       const dst = join(resDir, extra);
       try { cpSync(src, dst, { recursive: true }); console.log(`  ✅ ${extra}`); } catch { /* skip */ }
     }
-    const bgXmlSrc = join(iconOut, 'android', 'values', 'ic_launcher_background.xml');
-    const bgXmlDst = join(resDir, 'values', 'ic_launcher_background.xml');
-    try { mkdirSync(dirname(bgXmlDst), { recursive: true }); cpSync(bgXmlSrc, bgXmlDst); console.log('  ✅ ic_launcher_background.xml'); } catch { /* skip */ }
+
+    // Adaptive icon: background navy (bukan putih) + XML untuk ikon bulat juga.
+    const adaptiveXml = `<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+  <background android:drawable="@color/ic_launcher_background" />
+  <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>
+`;
+    put(join(resDir, 'mipmap-anydpi-v26/ic_launcher.xml'), adaptiveXml);
+    put(join(resDir, 'mipmap-anydpi-v26/ic_launcher_round.xml'), adaptiveXml);
+    put(join(resDir, 'values/ic_launcher_background.xml'), `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <color name="ic_launcher_background">#001A56</color>
+</resources>
+`);
+    console.log('  ✅ adaptive icon margin/background');
     const splashIcon = join(resDir, 'drawable-nodpi/splash_icon.png');
     mkdirSync(dirname(splashIcon), { recursive: true });
-    try { cpSync(join(iconOut, '128x128@2x.png'), splashIcon); } catch { try { cpSync(iconSrc, splashIcon); } catch { /* skip */ } }
+    try { cpSync(join(process.cwd(), 'src-tauri', 'icons', '128x128@2x.png'), splashIcon); }
+    catch { try { cpSync(brandIconSrc, splashIcon); } catch { /* skip */ } }
   } catch (e) {
     console.warn('⚠️  Gagal generate icon Android:', e);
   }
 }
-
-const put = (file: string, content: string) => { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, content); };
 
 // Splash
 put(join(resDir, 'drawable/splash_screen.xml'), `<layer-list xmlns:android="http://schemas.android.com/apk/res/android"><item android:drawable="@color/splash_background"/><item><bitmap android:gravity="center" android:src="@drawable/splash_icon" /></item></layer-list>\n`);
