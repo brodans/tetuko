@@ -1,161 +1,121 @@
-import { useEffect, useRef, useState } from 'react';
-import { Download, FileText, ExternalLink, Loader2 } from 'lucide-react';
-import { isTauriRuntime } from '../../lib/nativeAutomation';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight, Download, ExternalLink, FileSpreadsheet, FileText, Loader2, Minus, Plus } from 'lucide-react';
 import { saveBlobSmart, saveBlobToCacheAndOpen } from '../../lib/nativeSave';
-import { isAndroidTetuko, openReportOnAndroid } from '../../lib/androidNative';
+import { isAndroidTetuko as isAndroidBridge, openReportOnAndroid } from '../../lib/androidNative';
+import { isTauriRuntime } from '../../lib/nativeAutomation';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+import pdfWorkerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 
-interface ReportDocumentPreviewProps {
-  file: Blob;
-  format: 'pdf' | 'xls';
+interface ReportDocumentPreviewProps { file: Blob; format: 'pdf' | 'xls'; }
+type Cell = string;
+
+function android(): boolean {
+  return typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent) && (isTauriRuntime() || isAndroidBridge());
+}
+function mimeOf(file: Blob, format: 'pdf' | 'xls') {
+  return file.type || (format === 'pdf' ? 'application/pdf' : 'application/vnd.ms-excel');
+}
+function filenameOf(file: Blob, format: 'pdf' | 'xls') {
+  const mime = mimeOf(file, format).toLowerCase();
+  return `laporan.${format === 'pdf' ? 'pdf' : mime.includes('csv') ? 'csv' : mime.includes('spreadsheet') || mime.includes('openxml') ? 'xlsx' : 'xls'}`;
+}
+function decodeEntities(value: string): string {
+  const area = document.createElement('textarea'); area.innerHTML = value; return area.value;
+}
+function parseSpreadsheet(blobText: string): Cell[][] {
+  const xml = new DOMParser().parseFromString(blobText, 'application/xml');
+  const rows = [...xml.getElementsByTagNameNS('*', 'Row')];
+  return rows.map(row => [...row.getElementsByTagNameNS('*', 'Data')].map(cell => decodeEntities(cell.textContent || '')));
 }
 
-function isAndroidTauri(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  return (isTauriRuntime() || isAndroidTetuko()) && /android/i.test(navigator.userAgent);
-}
-
-function resolveMime(blob: Blob, format: 'pdf' | 'xls'): string {
-  if (blob.type) return blob.type;
-  return format === 'pdf' ? 'application/pdf' : 'application/vnd.ms-excel';
-}
-
-function resolveExtension(blob: Blob, format: 'pdf' | 'xls'): string {
-  const mime = resolveMime(blob, format).toLowerCase();
-  if (mime.includes('csv')) return 'csv';
-  if (format === 'pdf') return 'pdf';
-  if (mime.includes('spreadsheet') || mime.includes('openxml')) return 'xlsx';
-  return 'xls';
+let workerConfigured = false;
+function configurePdfWorker() {
+  if (!workerConfigured) { pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl; workerConfigured = true; }
 }
 
 export default function ReportDocumentPreview({ file, format }: ReportDocumentPreviewProps) {
-  const [url, setUrl] = useState<string>('');
-  const [opening, setOpening] = useState(false);
-  const [openErr, setOpenErr] = useState('');
-  const autoOpenedRef = useRef<string>('');
-  const android = isAndroidTauri();
-
-  const mime = file ? resolveMime(file, format) : '';
-  const filename = file ? `laporan.${resolveExtension(file, format)}` : `laporan.${format}`;
-  const fileKey = file ? `${filename}:${file.size}:${mime}` : '';
+  const [url, setUrl] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const [pdfPages, setPdfPages] = useState(0);
+  const [page, setPage] = useState(1);
+  const [scale, setScale] = useState(1);
+  const [pdfError, setPdfError] = useState('');
+  const [sheetRows, setSheetRows] = useState<Cell[][]>([]);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const isAndroid = android();
+  const filename = filenameOf(file, format);
+  const mime = mimeOf(file, format);
 
   useEffect(() => {
     if (!file) return;
-    const u = URL.createObjectURL(file);
-    setUrl(u);
-    setOpenErr('');
-    return () => { URL.revokeObjectURL(u); };
+    const nextUrl = URL.createObjectURL(file); setUrl(nextUrl); setMessage('');
+    return () => URL.revokeObjectURL(nextUrl);
   }, [file]);
 
-  const openExternal = async (auto = false) => {
-    if (!file) return;
-    setOpening(true);
-    setOpenErr('');
-    try {
-      if (android) {
-        const ok = await openReportOnAndroid(file, filename, mime);
-        if (!ok) throw new Error('Pembuka berkas Android tidak tersedia.');
-        return;
-      }
-      if (isTauriRuntime()) {
-        await saveBlobToCacheAndOpen(file, filename, mime);
-      } else if (url) {
-        window.open(url, '_blank', 'noopener,noreferrer');
-      }
-    } catch (e: any) {
-      if (!auto) setOpenErr(e?.message || 'Gagal membuka laporan.');
-    } finally {
-      setOpening(false);
-    }
-  };
-
-  // Android: laporan langsung dialihkan ke aplikasi eksternal (Chrome/PDF viewer/Excel).
   useEffect(() => {
-    if (!android || !fileKey) return;
-    if (autoOpenedRef.current === fileKey) return;
-    autoOpenedRef.current = fileKey;
-    void openExternal(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [android, fileKey]);
+    let cancelled = false;
+    if (!file || format !== 'xls') { setSheetRows([]); return; }
+    file.text().then(text => { if (!cancelled) setSheetRows(parseSpreadsheet(text)); }).catch(() => { if (!cancelled) setSheetRows([]); });
+    return () => { cancelled = true; };
+  }, [file, format]);
 
-  const saveFile = async () => {
-    if (!file) return;
+  useEffect(() => {
+    let cancelled = false;
+    if (!file || format !== 'pdf') return;
+    configurePdfWorker(); setPdfError(''); setPdfPages(0); setPage(1);
+    file.arrayBuffer().then(async data => {
+      const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(data) }).promise;
+      if (!cancelled) setPdfPages(pdf.numPages);
+    }).catch(e => { if (!cancelled) setPdfError(e?.message || 'PDF tidak dapat ditampilkan.'); });
+    return () => { cancelled = true; };
+  }, [file, format]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!file || format !== 'pdf' || !pdfPages || !canvasRef.current) return;
+    configurePdfWorker();
+    file.arrayBuffer().then(async data => {
+      const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(data) }).promise;
+      const pdfPage = await pdf.getPage(page);
+      const viewport = pdfPage.getViewport({ scale: 1.25 * scale });
+      const canvas = canvasRef.current; if (!canvas || cancelled) return;
+      const ratio = window.devicePixelRatio || 1;
+      canvas.width = Math.floor(viewport.width * ratio); canvas.height = Math.floor(viewport.height * ratio);
+      canvas.style.width = `${viewport.width}px`; canvas.style.height = `${viewport.height}px`;
+      await pdfPage.render({ canvas, canvasContext: canvas.getContext('2d')!, viewport, transform: ratio !== 1 ? [ratio, 0, 0, ratio, 0, 0] : undefined }).promise;
+    }).catch(e => { if (!cancelled) setPdfError(e?.message || 'Halaman PDF gagal dirender.'); });
+    return () => { cancelled = true; };
+  }, [file, format, page, scale, pdfPages]);
+
+  const openExternal = useCallback(async () => {
+    setBusy(true); setMessage('');
     try {
-      await saveBlobSmart({ blob: file, filename, mimeHint: mime });
-    } catch (e: any) {
-      setOpenErr(e?.message || 'Gagal menyimpan laporan.');
-    }
-  };
+      const ok = isAndroid ? await openReportOnAndroid(file, filename, mime) : isTauriRuntime() ? await saveBlobToCacheAndOpen(file, filename, mime).then(Boolean) : Boolean(window.open(url, '_blank', 'noopener,noreferrer'));
+      if (!ok) setMessage('Aplikasi pembuka tidak tersedia. Gunakan tombol Unduh.');
+    } catch (e: any) { setMessage(e?.message || 'Gagal membuka berkas.'); }
+    finally { setBusy(false); }
+  }, [file, filename, mime, url, isAndroid]);
 
-  if (!file) {
-    return <div className="p-6 text-sm text-slate-500">Tidak ada dokumen untuk ditampilkan.</div>;
-  }
+  const download = useCallback(async () => {
+    setBusy(true);
+    try { await saveBlobSmart({ blob: file, filename, mimeHint: mime }); }
+    catch (e: any) { setMessage(e?.message || 'Gagal menyimpan berkas.'); }
+    finally { setBusy(false); }
+  }, [file, filename, mime]);
 
-  const actions = (
-    <div className="flex flex-wrap items-center justify-center gap-2">
-      <button
-        type="button"
-        onClick={() => void openExternal(false)}
-        disabled={opening}
-        className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2.5"
-      >
-        {opening ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />} Buka
-      </button>
-      <button
-        type="button"
-        onClick={() => void saveFile()}
-        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-semibold px-4 py-2.5"
-      >
-        <Download className="w-4 h-4" /> Simpan
-      </button>
+  if (!file) return <div className="p-6 text-sm text-slate-500">Tidak ada dokumen.</div>;
+
+  const toolbar = <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
+    <div className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300"><FileText className="h-4 w-4 text-blue-500" /> {format === 'pdf' ? `PDF · Halaman ${page}/${pdfPages || '…'}` : 'Spreadsheet · pratinjau'}</div>
+    <div className="flex items-center gap-1.5">
+      {format === 'pdf' && <><button type="button" onClick={() => setScale(v => Math.max(.7, v - .1))} className="rounded-lg border p-2" aria-label="Perkecil"><Minus className="h-4 w-4" /></button><span className="min-w-12 text-center text-xs">{Math.round(scale * 100)}%</span><button type="button" onClick={() => setScale(v => Math.min(2, v + .1))} className="rounded-lg border p-2" aria-label="Perbesar"><Plus className="h-4 w-4" /></button><button type="button" disabled={page <= 1} onClick={() => setPage(v => v - 1)} className="rounded-lg border p-2 disabled:opacity-40"><ChevronLeft className="h-4 w-4" /></button><button type="button" disabled={page >= pdfPages} onClick={() => setPage(v => v + 1)} className="rounded-lg border p-2 disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button></>}
+      <button type="button" onClick={() => void openExternal()} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60"><ExternalLink className="h-4 w-4" /> Buka</button>
+      <button type="button" onClick={() => void download()} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold"><Download className="h-4 w-4" /> Unduh</button>
     </div>
-  );
+  </div>;
 
-  if (format === 'pdf') {
-    if (!android && url) {
-      return (
-        <div className="w-full flex-1 min-h-0 flex flex-col bg-slate-100 dark:bg-slate-950">
-          <object data={url} type="application/pdf" className="w-full flex-1 min-h-[60vh] bg-white">
-            <iframe title="Pratinjau Laporan PDF" src={url} className="w-full flex-1 min-h-[60vh] border-0 bg-white" />
-          </object>
-          <div className="shrink-0 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 flex flex-wrap items-center justify-center gap-2">
-            {actions}
-          </div>
-        </div>
-      );
-    }
+  if (format === 'pdf') return <div className="flex min-h-0 flex-1 flex-col bg-slate-200 dark:bg-slate-950">{toolbar}<div className="min-h-0 flex-1 overflow-auto p-3 sm:p-6"><div className="mx-auto flex min-h-full w-fit items-start justify-center"><canvas ref={canvasRef} className="bg-white shadow-xl" />{!pdfPages && !pdfError && <Loader2 className="m-8 h-6 w-6 animate-spin text-slate-500" />}{pdfError && <div className="rounded-xl bg-white p-5 text-sm text-red-600">{pdfError}</div>}</div></div>{message && <div className="shrink-0 px-3 py-2 text-center text-xs text-rose-600">{message}</div>}</div>;
 
-    return (
-      <div className="w-full flex-1 min-h-0 flex items-center justify-center bg-slate-100 dark:bg-slate-950 p-6">
-        <div className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-center space-y-3 shadow-sm">
-          <div className="mx-auto w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-            <FileText className="w-6 h-6" />
-          </div>
-          <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">Laporan PDF</div>
-          <div className="text-xs text-slate-500 dark:text-slate-400">
-            Laporan dibuka otomatis di aplikasi eksternal (Chrome/PDF viewer). Jika belum terbuka, gunakan tombol di bawah.
-          </div>
-          {openErr && <div className="text-xs text-red-600 dark:text-red-400">{openErr}</div>}
-          <div className="pt-1">{actions}</div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="w-full flex-1 min-h-0 flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-6">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-center space-y-3 shadow-sm">
-        <div className="mx-auto w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-          <FileText className="w-6 h-6" />
-        </div>
-        <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">Laporan {format.toUpperCase()}</div>
-        <div className="text-xs text-slate-500 dark:text-slate-400">
-          {android
-            ? 'Laporan dibuka otomatis di aplikasi eksternal (Chrome/Excel). Jika belum terbuka, gunakan tombol di bawah.'
-            : 'Gunakan tombol di bawah untuk membuka atau menyimpan laporan.'}
-        </div>
-        {openErr && <div className="text-xs text-red-600 dark:text-red-400">{openErr}</div>}
-        <div className="pt-1">{actions}</div>
-      </div>
-    </div>
-  );
+  return <div className="flex min-h-0 flex-1 flex-col bg-slate-100 dark:bg-slate-950">{toolbar}<div className="min-h-0 flex-1 overflow-auto p-3 sm:p-5"><div className="mx-auto w-max min-w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900"><table className="border-collapse text-xs"><tbody>{sheetRows.length ? sheetRows.map((row, ri) => <tr key={ri} className={ri === 0 ? 'bg-emerald-50 font-bold dark:bg-emerald-950/30' : ''}>{row.map((cell, ci) => <td key={ci} className="max-w-[360px] border border-slate-200 px-3 py-2 align-top dark:border-slate-700">{cell}</td>)}</tr>) : <tr><td className="p-6 text-slate-500">Memuat spreadsheet…</td></tr>}</tbody></table></div></div>{message && <div className="shrink-0 px-3 py-2 text-center text-xs text-rose-600">{message}</div>}<div className="hidden"><FileSpreadsheet /></div></div>;
 }
