@@ -539,7 +539,7 @@ class MainActivity : TauriActivity() {
     val script = """
       (function() {
         try {
-          var top='${topDp}px', bot='${bottomDp}px', left='${leftDp}px', right='${rightDp}px';
+          var top='\${topDp}px', bot='\${bottomDp}px', left='\${leftDp}px', right='\${rightDp}px';
           var root = document.documentElement;
           var body = document.body;
           root.style.setProperty('--sat', top);

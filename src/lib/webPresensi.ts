@@ -3,7 +3,7 @@
  * Adapted for unified app (profile-aware EP base via header/cookie handled by proxy).
  */
 
-import { apiUrl, ensureTauriApiBase, getTauriApiBase, rebaseTauriApiUrlToCurrent, tauriResilientFetch } from './apiBase';
+import { apiUrl, ensureTauriApiBase, getTauriApiBase, rebaseTauriApiUrlToCurrent } from './apiBase';
 
 const PROXY = '/ep';
 function epUrl(pathAfterEp: string) {

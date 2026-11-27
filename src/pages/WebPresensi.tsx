@@ -16,7 +16,7 @@ import {
   type HasilKehadiran, type HasilPerizinan,
 } from '../lib/webPresensi';
 import { useAppContext, type WebPresensiTab } from '../context/AppContext';
-import { IS_VERCEL_DEPLOY } from '../lib/deployMode';
+
 import { useToast } from '../components/ui/Toast';
 import { saveBlobSmart } from '../lib/nativeSave';
 

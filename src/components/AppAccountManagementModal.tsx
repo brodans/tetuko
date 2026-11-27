@@ -371,7 +371,7 @@ function ServerCredsTab() {
     catch (e:any) { setErr(er=>({...er,[id]: e?.message || 'Gagal menghapus.'})); } finally { setBusy(null); }
   };
 
-  const loadCaptcha = async (id: ServerProfileId, opts?: { autoOcr?: boolean }) => {
+  const loadCaptcha = async (id: ServerProfileId) => {
     const prevUrl = imei[id]?.url;
     if (prevUrl?.startsWith('blob:')) { try { URL.revokeObjectURL(prevUrl); } catch {} }
     setI(id, { open: true, loading: true, error: '', info: 'Memuat captcha…', url: null });
@@ -391,7 +391,7 @@ function ServerCredsTab() {
     const f = forms[id] || { nip: '', password: '', imei: '' };
     if (!f.nip.trim() || !f.password) { setErr(e => ({ ...e, [id]: 'Isi NIP/Username dan Password terlebih dahulu untuk mengambil IMEI.' })); return; }
     setErr(e => ({ ...e, [id]: '' })); setMsg(m => ({ ...m, [id]: '' }));
-    await loadCaptcha(id, { autoOcr: true });
+    await loadCaptcha(id);
   };
 
   const verifyAndFetchImei = async (id: ServerProfileId) => {
@@ -418,7 +418,7 @@ function ServerCredsTab() {
       const msgErr = e?.message || 'Gagal verifikasi/mengambil IMEI.';
       const perlu = /captcha|verifikasi|gagal login|salah/i.test(msgErr);
       setI(id, { busy: false, error: msgErr, info: perlu ? 'Memuat captcha baru…' : '' });
-      if (perlu) { try { await loadCaptcha(id, { autoOcr: true }); } catch {} }
+      if (perlu) { try { await loadCaptcha(id); } catch {} }
     }
   };
 
@@ -462,7 +462,7 @@ function ServerCredsTab() {
                 <div className="rounded-xl border border-blue-200 dark:border-blue-800/50 bg-white dark:bg-slate-900/60 p-3 sm:p-4 space-y-3">
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-xs font-bold text-slate-800 dark:text-slate-100">Verifikasi Captcha & Ambil IMEI</div>
-                    <button type="button" onClick={() => void loadCaptcha(p.id as ServerProfileId, { autoOcr: true })} disabled={im.loading || im.busy} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60"><RefreshCw className={`w-3.5 h-3.5 ${im.loading ? 'animate-spin' : ''}`} /> Muat Ulang</button>
+                    <button type="button" onClick={() => void loadCaptcha(p.id as ServerProfileId)} disabled={im.loading || im.busy} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60"><RefreshCw className={`w-3.5 h-3.5 ${im.loading ? 'animate-spin' : ''}`} /> Muat Ulang</button>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-3 items-start">
                     <div className="w-full sm:w-[220px] h-[72px] rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-center overflow-hidden shrink-0">
