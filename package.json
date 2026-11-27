@@ -12,6 +12,9 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
+    "tauri:android:init": "tauri android init && tsx tools/patch-android-native.mts",
+    "tauri:android:dev": "tauri android dev",
+    "tauri:android:build": "tsx tools/patch-android-native.mts && tauri android build --apk --target aarch64",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

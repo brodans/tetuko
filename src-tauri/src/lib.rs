@@ -9,11 +9,14 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{net::SocketAddr, sync::Arc};
+use tauri::{Emitter, Manager};
+#[cfg(desktop)]
 use tauri::{
     menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Emitter, Manager, WindowEvent,
+    WindowEvent,
 };
+#[cfg(desktop)]
 use tauri_plugin_autostart::ManagerExt;
 mod automation;
 mod captcha_ocr;
@@ -1254,10 +1257,12 @@ fn show_main_window(app: &tauri::AppHandle) {
         let _ = w.show();
         let _ = w.unminimize();
         let _ = w.set_focus();
+        #[cfg(desktop)]
         let _ = w.set_skip_taskbar(false);
     }
 }
 
+#[cfg(desktop)]
 fn hide_main_window(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         // Sembunyikan ke tray agar proses automasi/notifikasi tetap berjalan di background (service Rust tetap aktif)
@@ -1266,6 +1271,7 @@ fn hide_main_window(app: &tauri::AppHandle) {
     }
 }
 
+#[cfg(desktop)]
 fn emit_tray_navigate(app: &tauri::AppHandle, target: &str) {
     show_main_window(app);
     let _ = app.emit(
@@ -1274,6 +1280,7 @@ fn emit_tray_navigate(app: &tauri::AppHandle, target: &str) {
     );
 }
 
+#[cfg(desktop)]
 fn build_tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let show_i = MenuItem::with_id(app, "show", "Buka TETUKO", true, None::<&str>)?;
     let hide_i = MenuItem::with_id(app, "hide", "Sembunyikan ke Tray", true, None::<&str>)?;
@@ -1348,6 +1355,7 @@ fn build_tray_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     )
 }
 
+#[cfg(desktop)]
 fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
     let menu = build_tray_menu(app.handle())?;
 
@@ -1419,11 +1427,19 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
     Ok(())
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 fn get_autostart_enabled(app: tauri::AppHandle) -> Result<bool, String> {
     Ok(app.autolaunch().is_enabled().unwrap_or(false))
 }
 
+#[cfg(not(desktop))]
+#[tauri::command]
+fn get_autostart_enabled() -> Result<bool, String> {
+    Ok(false)
+}
+
+#[cfg(desktop)]
 #[tauri::command]
 fn set_autostart_enabled(app: tauri::AppHandle, enabled: bool) -> Result<bool, String> {
     let autostart = app.autolaunch();
@@ -1444,18 +1460,30 @@ fn set_autostart_enabled(app: tauri::AppHandle, enabled: bool) -> Result<bool, S
     Ok(enabled)
 }
 
+#[cfg(not(desktop))]
+#[tauri::command]
+fn set_autostart_enabled(_enabled: bool) -> Result<bool, String> {
+    Ok(false)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_autostart::init(
+        .plugin(tauri_plugin_opener::init());
+
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--minimized"]),
-        ))
+        ));
+    }
+
+    let builder = builder
         .invoke_handler(tauri::generate_handler![
             absensi_image_proxy,
             automation::automation_sync,
@@ -1472,28 +1500,35 @@ pub fn run() {
                 start_local_server().await;
             });
 
-            // System tray + background mode (tutup jendela => sembunyi ke tray, proses automasi tetap aktif di Rust)
-            if let Err(e) = setup_tray(app) {
-                eprintln!("[TETUKO] Gagal membuat system tray: {}", e);
-            }
+            #[cfg(desktop)]
+            {
+                // System tray + background mode (tutup jendela => sembunyi ke tray, proses automasi tetap aktif di Rust)
+                if let Err(e) = setup_tray(app) {
+                    eprintln!("[TETUKO] Gagal membuat system tray: {}", e);
+                }
 
-            // Jika dijalankan dengan argumen --minimized (autostart), sembunyikan jendela utama ke tray
-            let minimized = std::env::args().any(|a| a == "--minimized");
-            if minimized {
-                hide_main_window(app.handle());
+                // Jika dijalankan dengan argumen --minimized (autostart), sembunyikan jendela utama ke tray
+                let minimized = std::env::args().any(|a| a == "--minimized");
+                if minimized {
+                    hide_main_window(app.handle());
+                }
             }
 
             Ok(())
-        })
-        .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                // Tutup jendela = sembunyi ke tray (tidak mematikan proses/tray/automasi).
-                // Keluar aplikasi hanya melalui menu tray "Keluar".
-                let app = window.app_handle();
-                hide_main_window(app);
-                api.prevent_close();
-            }
-        })
+        });
+
+    #[cfg(desktop)]
+    let builder = builder.on_window_event(|window, event| {
+        if let WindowEvent::CloseRequested { api, .. } = event {
+            // Tutup jendela = sembunyi ke tray (tidak mematikan proses/tray/automasi).
+            // Keluar aplikasi hanya melalui menu tray "Keluar".
+            let app = window.app_handle();
+            hide_main_window(app);
+            api.prevent_close();
+        }
+    });
+
+    builder
         .run(tauri::generate_context!())
         .expect("error while running TETUKO");
 }

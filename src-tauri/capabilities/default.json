@@ -5,7 +5,6 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "core:tray:default",
     "shell:allow-open",
     "notification:default",
     "dialog:allow-save",
@@ -32,9 +31,6 @@
     },
     "opener:allow-open-path",
     "opener:allow-reveal-item-in-dir",
-    "opener:allow-default-urls",
-    "autostart:allow-enable",
-    "autostart:allow-disable",
-    "autostart:allow-is-enabled"
+    "opener:allow-default-urls"
   ]
 }

@@ -1,0 +1,186 @@
+name: Tauri Android (APK Release)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+    runs-on: ubuntu-24.04
+    env:
+      ANDROID_KEYSTORE_PATH: /tmp/tetuko-release.jks
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      NDK_HOME: /usr/local/lib/android/sdk/ndk/27.0.12077973
+      ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/27.0.12077973
+
+      # Firebase / Firestore
+      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY || vars.VITE_FIREBASE_API_KEY || '' }}
+      VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN || vars.VITE_FIREBASE_AUTH_DOMAIN || '' }}
+      VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID || vars.VITE_FIREBASE_PROJECT_ID || '' }}
+      VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET || vars.VITE_FIREBASE_STORAGE_BUCKET || '' }}
+      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID || vars.VITE_FIREBASE_MESSAGING_SENDER_ID || '' }}
+      VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID || vars.VITE_FIREBASE_APP_ID || '' }}
+      VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID || vars.VITE_FIREBASE_MEASUREMENT_ID || '' }}
+      VITE_APP_SECRET: ${{ secrets.VITE_APP_SECRET || vars.VITE_APP_SECRET || '' }}
+      VITE_PAYLOAD_KEY: ${{ secrets.VITE_PAYLOAD_KEY || vars.VITE_PAYLOAD_KEY || '' }}
+
+      # Profil Jatim
+      VITE_JATIM_ID: ${{ secrets.VITE_JATIM_ID || vars.VITE_JATIM_ID || 'jatim' }}
+      VITE_JATIM_NAME: ${{ secrets.VITE_JATIM_NAME || vars.VITE_JATIM_NAME || 'Provinsi Jawa Timur' }}
+      VITE_JATIM_LABEL: ${{ secrets.VITE_JATIM_LABEL || vars.VITE_JATIM_LABEL || 'Presensi Jatimprov' }}
+      VITE_JATIM_GATEWAY_URL: ${{ secrets.VITE_JATIM_GATEWAY_URL || vars.VITE_JATIM_GATEWAY_URL || '' }}
+      VITE_JATIM_EP_BASE_URL: ${{ secrets.VITE_JATIM_EP_BASE_URL || vars.VITE_JATIM_EP_BASE_URL || '' }}
+      VITE_JATIM_MODE: ${{ secrets.VITE_JATIM_MODE || vars.VITE_JATIM_MODE || 'bkd-rpc' }}
+      VITE_JATIM_REQUIRES_PHOTO: ${{ secrets.VITE_JATIM_REQUIRES_PHOTO || vars.VITE_JATIM_REQUIRES_PHOTO || 'false' }}
+      VITE_JATIM_REQUIRES_WORKCODE: ${{ secrets.VITE_JATIM_REQUIRES_WORKCODE || vars.VITE_JATIM_REQUIRES_WORKCODE || 'true' }}
+
+      # Profil Madiun
+      VITE_MADIUN_ID: ${{ secrets.VITE_MADIUN_ID || vars.VITE_MADIUN_ID || 'madiun' }}
+      VITE_MADIUN_NAME: ${{ secrets.VITE_MADIUN_NAME || vars.VITE_MADIUN_NAME || 'Kabupaten Madiun' }}
+      VITE_MADIUN_LABEL: ${{ secrets.VITE_MADIUN_LABEL || vars.VITE_MADIUN_LABEL || 'Presensi Madiunkab' }}
+      VITE_MADIUN_GATEWAY_URL: ${{ secrets.VITE_MADIUN_GATEWAY_URL || vars.VITE_MADIUN_GATEWAY_URL || '' }}
+      VITE_MADIUN_EP_BASE_URL: ${{ secrets.VITE_MADIUN_EP_BASE_URL || vars.VITE_MADIUN_EP_BASE_URL || '' }}
+      VITE_MADIUN_MODE: ${{ secrets.VITE_MADIUN_MODE || vars.VITE_MADIUN_MODE || 'bkd-rpc' }}
+      VITE_MADIUN_REQUIRES_PHOTO: ${{ secrets.VITE_MADIUN_REQUIRES_PHOTO || vars.VITE_MADIUN_REQUIRES_PHOTO || 'false' }}
+      VITE_MADIUN_REQUIRES_WORKCODE: ${{ secrets.VITE_MADIUN_REQUIRES_WORKCODE || vars.VITE_MADIUN_REQUIRES_WORKCODE || 'true' }}
+
+      # Profil Ponorogo
+      VITE_PONOROGO_ID: ${{ secrets.VITE_PONOROGO_ID || vars.VITE_PONOROGO_ID || 'ponorogo' }}
+      VITE_PONOROGO_NAME: ${{ secrets.VITE_PONOROGO_NAME || vars.VITE_PONOROGO_NAME || 'Kabupaten Ponorogo' }}
+      VITE_PONOROGO_LABEL: ${{ secrets.VITE_PONOROGO_LABEL || vars.VITE_PONOROGO_LABEL || 'Presensi Ponorogo' }}
+      VITE_PONOROGO_GATEWAY_URL: ${{ secrets.VITE_PONOROGO_GATEWAY_URL || vars.VITE_PONOROGO_GATEWAY_URL || '' }}
+      VITE_PONOROGO_EP_BASE_URL: ${{ secrets.VITE_PONOROGO_EP_BASE_URL || vars.VITE_PONOROGO_EP_BASE_URL || '' }}
+      VITE_PONOROGO_MODE: ${{ secrets.VITE_PONOROGO_MODE || vars.VITE_PONOROGO_MODE || 'ponorogo-absensi' }}
+      VITE_PONOROGO_REQUIRES_PHOTO: ${{ secrets.VITE_PONOROGO_REQUIRES_PHOTO || vars.VITE_PONOROGO_REQUIRES_PHOTO || 'true' }}
+      VITE_PONOROGO_REQUIRES_WORKCODE: ${{ secrets.VITE_PONOROGO_REQUIRES_WORKCODE || vars.VITE_PONOROGO_REQUIRES_WORKCODE || 'false' }}
+      VITE_PONOROGO_API_BASE: ${{ secrets.VITE_PONOROGO_API_BASE || vars.VITE_PONOROGO_API_BASE || '' }}
+      VITE_PONOROGO_IMAGE_BASE: ${{ secrets.VITE_PONOROGO_IMAGE_BASE || vars.VITE_PONOROGO_IMAGE_BASE || '' }}
+
+      VITE_LOCAL_API_PORT: ${{ secrets.VITE_LOCAL_API_PORT || vars.VITE_LOCAL_API_PORT || '14200' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: ''
+          accept-android-sdk-licenses: false
+
+      - name: Install Android platform
+        shell: bash
+        run: |
+          set -euo pipefail
+          packages=("platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973")
+          for attempt in 1 2 3; do
+            echo "Installing Android SDK packages (attempt ${attempt}/3)..."
+            if sdkmanager --sdk_root="${ANDROID_HOME}" "${packages[@]}"; then
+              exit 0
+            fi
+            if [[ "${attempt}" -lt 3 ]]; then
+              echo "::warning::sdkmanager failed; clearing partial downloads before retry."
+              rm -rf "${ANDROID_HOME}/temp" "${HOME}/.android/cache"
+            fi
+          done
+          exit 1
+
+      - run: npm ci
+
+      - name: Initialize Android project
+        run: npm run tauri:android:init
+
+      - name: Decode and verify Release Keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "ERROR: ANDROID_KEYSTORE_BASE64 secret is missing."
+            exit 1
+          fi
+          node -e "const fs = require('fs'); fs.writeFileSync('/tmp/tetuko-release.jks', Buffer.from(process.env.ANDROID_KEYSTORE_BASE64, 'base64'));"
+          ls -l /tmp/tetuko-release.jks
+
+      - name: Generate .env for Vite build
+        shell: bash
+        run: |
+          cat > .env <<EOF
+          VITE_FIREBASE_API_KEY=${VITE_FIREBASE_API_KEY}
+          VITE_FIREBASE_AUTH_DOMAIN=${VITE_FIREBASE_AUTH_DOMAIN}
+          VITE_FIREBASE_PROJECT_ID=${VITE_FIREBASE_PROJECT_ID}
+          VITE_FIREBASE_STORAGE_BUCKET=${VITE_FIREBASE_STORAGE_BUCKET}
+          VITE_FIREBASE_MESSAGING_SENDER_ID=${VITE_FIREBASE_MESSAGING_SENDER_ID}
+          VITE_FIREBASE_APP_ID=${VITE_FIREBASE_APP_ID}
+          VITE_FIREBASE_MEASUREMENT_ID=${VITE_FIREBASE_MEASUREMENT_ID}
+          VITE_APP_SECRET=${VITE_APP_SECRET}
+          VITE_PAYLOAD_KEY=${VITE_PAYLOAD_KEY}
+
+          VITE_JATIM_ID=${VITE_JATIM_ID}
+          VITE_JATIM_NAME=${VITE_JATIM_NAME}
+          VITE_JATIM_LABEL=${VITE_JATIM_LABEL}
+          VITE_JATIM_GATEWAY_URL=${VITE_JATIM_GATEWAY_URL}
+          VITE_JATIM_EP_BASE_URL=${VITE_JATIM_EP_BASE_URL}
+          VITE_JATIM_MODE=${VITE_JATIM_MODE}
+          VITE_JATIM_REQUIRES_PHOTO=${VITE_JATIM_REQUIRES_PHOTO}
+          VITE_JATIM_REQUIRES_WORKCODE=${VITE_JATIM_REQUIRES_WORKCODE}
+
+          VITE_MADIUN_ID=${VITE_MADIUN_ID}
+          VITE_MADIUN_NAME=${VITE_MADIUN_NAME}
+          VITE_MADIUN_LABEL=${VITE_MADIUN_LABEL}
+          VITE_MADIUN_GATEWAY_URL=${VITE_MADIUN_GATEWAY_URL}
+          VITE_MADIUN_EP_BASE_URL=${VITE_MADIUN_EP_BASE_URL}
+          VITE_MADIUN_MODE=${VITE_MADIUN_MODE}
+          VITE_MADIUN_REQUIRES_PHOTO=${VITE_MADIUN_REQUIRES_PHOTO}
+          VITE_MADIUN_REQUIRES_WORKCODE=${VITE_MADIUN_REQUIRES_WORKCODE}
+
+          VITE_PONOROGO_ID=${VITE_PONOROGO_ID}
+          VITE_PONOROGO_NAME=${VITE_PONOROGO_NAME}
+          VITE_PONOROGO_LABEL=${VITE_PONOROGO_LABEL}
+          VITE_PONOROGO_GATEWAY_URL=${VITE_PONOROGO_GATEWAY_URL}
+          VITE_PONOROGO_EP_BASE_URL=${VITE_PONOROGO_EP_BASE_URL}
+          VITE_PONOROGO_MODE=${VITE_PONOROGO_MODE}
+          VITE_PONOROGO_REQUIRES_PHOTO=${VITE_PONOROGO_REQUIRES_PHOTO}
+          VITE_PONOROGO_REQUIRES_WORKCODE=${VITE_PONOROGO_REQUIRES_WORKCODE}
+          VITE_PONOROGO_API_BASE=${VITE_PONOROGO_API_BASE}
+          VITE_PONOROGO_IMAGE_BASE=${VITE_PONOROGO_IMAGE_BASE}
+
+          VITE_LOCAL_API_PORT=${VITE_LOCAL_API_PORT}
+          EOF
+
+      - name: Read app version
+        id: app
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build Android APK (release)
+        run: npm run tauri:android:build
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TETUKO-${{ steps.app.outputs.version }}-android-apk
+          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error

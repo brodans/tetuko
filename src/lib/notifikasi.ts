@@ -1,8 +1,10 @@
+import { isAndroidTetuko, showAndroidNotification } from './androidNative';
+
 /**
- * Notifikasi native/web (Tauri desktop atau Web Notification API).
+ * Notifikasi native/web (Tauri desktop, Android bridge, atau Web Notification API).
  */
 export async function kirimNotifikasiNative(title: string, message: string): Promise<void> {
-  // Tauri plugin-notification (desktop)
+  // Tauri plugin-notification
   try {
     const { sendNotification, isPermissionGranted, requestPermission } =
       await import('@tauri-apps/plugin-notification');
@@ -17,6 +19,13 @@ export async function kirimNotifikasiNative(title: string, message: string): Pro
     }
   } catch {
     // di luar Tauri / plugin tidak tersedia
+  }
+
+  // Android native bridge
+  try {
+    if (isAndroidTetuko() && showAndroidNotification(title, message)) return;
+  } catch {
+    // abaikan
   }
 
   // Web Notification API

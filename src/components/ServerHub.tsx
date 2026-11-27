@@ -41,7 +41,7 @@ export default function ServerHub({ isDarkMode, toggleDarkMode, onAppLogout }: P
   const [hubTab, setHubTab] = useState<'server' | 'preset'>('server');
   const [autostartOn, setAutostartOn] = useState(false);
   const [autostartBusy, setAutostartBusy] = useState(false);
-  const isTauri = isTauriRuntime();
+  const isDesktopTauri = isTauriRuntime() && !/android/i.test(navigator.userAgent);
   const appSession = useMemo(() => loadAppAuthSession(), [showManage]);
   const isAppAdmin = appSession?.role === 'admin';
   const accountKey = (appSession?.user?.username || (isAppAdmin ? 'admin' : 'user')).toLowerCase();
@@ -65,17 +65,17 @@ export default function ServerHub({ isDarkMode, toggleDarkMode, onAppLogout }: P
   const profile = useMemo(() => SERVER_PROFILES.find(p => p.id === selected) || null, [selected]);
 
   useEffect(() => {
-    if (!isTauri) return;
+    if (!isDesktopTauri) return;
     let un: (() => void) | null = null;
     (async () => {
       try { setAutostartOn(await getAutostartEnabled()); } catch {}
       try { un = await listenAutostartChanged((v) => setAutostartOn(v)); } catch {}
     })();
     return () => { try { un?.(); } catch {} };
-  }, [isTauri]);
+  }, [isDesktopTauri]);
 
   const toggleAutostart = async () => {
-    if (!isTauri || autostartBusy) return;
+    if (!isDesktopTauri || autostartBusy) return;
     setAutostartBusy(true);
     try {
       const next = !autostartOn;
@@ -392,9 +392,9 @@ export default function ServerHub({ isDarkMode, toggleDarkMode, onAppLogout }: P
               </div>
             </div>
 
-            {(isTauri || isAppAdmin || onAppLogout) && (
+            {(isDesktopTauri || isAppAdmin || onAppLogout) && (
               <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                {isTauri && (
+                {isDesktopTauri && (
                   <button
                     type="button"
                     onClick={() => void toggleAutostart()}

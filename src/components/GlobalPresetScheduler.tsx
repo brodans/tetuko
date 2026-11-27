@@ -17,6 +17,12 @@ import {
 } from '../lib/presetOtomatisasi';
 import { bacaStorage, tulisStorage } from '../lib/storageAman';
 import { isTauriRuntime, syncNativeAutomation, setNativeScheduler } from '../lib/nativeAutomation';
+import {
+  isAndroidTetuko,
+  requestAndroidNotificationPermission,
+  startAndroidForegroundService,
+  stopAndroidForegroundService,
+} from '../lib/androidNative';
 import { bacaTitik } from '../lib/lokasiTersimpan';
 import { getServerProfile, SERVER_PROFILES } from '../lib/serverProfiles';
 import { bacaSemuaPreset as bacaSemuaPresetLegacy, bacaSemuaStockFoto as bacaSemuaStockFotoLegacy } from '../lib/presetAutomasi';
@@ -153,6 +159,19 @@ function GlobalPresetSchedulerInner() {
     if (!tauri) return;
     void setNativeScheduler(serverProfileId, penjadwalAktif);
   }, [tauri, serverProfileId, penjadwalAktif]);
+
+  useEffect(() => {
+    if (!isAndroidTetuko()) return;
+    if (penjadwalAktif) {
+      requestAndroidNotificationPermission();
+      startAndroidForegroundService(
+        'TETUKO Automasi Aktif',
+        'Scheduler presensi berjalan di latar belakang',
+      );
+    } else {
+      stopAndroidForegroundService();
+    }
+  }, [penjadwalAktif]);
 
   const syncAllToNative = useCallback(async () => {
     if (!isTauriRuntime()) return;
