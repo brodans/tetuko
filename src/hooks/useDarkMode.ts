@@ -35,6 +35,7 @@ function applyTheme(isDark: boolean) {
   root.classList.toggle('light', !isDark);
   const metaThemeColor = document.getElementById('theme-color-meta') || document.querySelector('meta[name="theme-color"]');
   if (metaThemeColor) metaThemeColor.setAttribute('content', isDark ? '#0B1120' : '#F8FAFC');
+  try { (window as any).AndroidTetuko?.setTheme?.(isDark); } catch {}
 }
 
 export function useDarkMode() {

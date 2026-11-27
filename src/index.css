@@ -103,31 +103,120 @@
   }
 
   :root {
-    --poni-kiri: 0px;
-    --poni-kanan: 0px;
-    --poni-atas: 0px;
-    --poni-bawah: 0px;
+    --sat: env(safe-area-inset-top, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+    --poni-kiri: env(safe-area-inset-left, 0px);
+    --poni-kanan: env(safe-area-inset-right, 0px);
+    --poni-atas: var(--sat);
+    --poni-bawah: var(--sab);
+  }
+
+  body.is-native {
+    --poni-atas: var(--sat);
+    --poni-bawah: var(--sab);
   }
 }
 
-/* Gutter untuk isi halaman */
+/* Gutter untuk isi halaman + safe area Android/iOS edge-to-edge */
 @layer components {
   .poni-konten {
-    padding: 1.25rem 1rem;
+    padding-top: 1.25rem;
+    padding-left: max(1rem, var(--poni-kiri));
+    padding-right: max(1rem, var(--poni-kanan));
+    padding-bottom: calc(var(--poni-bawah, var(--sab)) + 1.25rem);
+    box-sizing: border-box;
   }
   @media (min-width: 640px) {
     .poni-konten {
-      padding: 1.5rem;
+      padding-top: 1.5rem;
+      padding-left: max(1.5rem, var(--poni-kiri));
+      padding-right: max(1.5rem, var(--poni-kanan));
+      padding-bottom: calc(var(--poni-bawah, var(--sab)) + 1.5rem);
     }
   }
   @media (min-width: 1024px) {
     .poni-konten {
-      padding: 1.75rem 2rem;
+      padding-top: 1.75rem;
+      padding-left: max(2rem, var(--poni-kiri));
+      padding-right: max(2rem, var(--poni-kanan));
+      padding-bottom: calc(var(--poni-bawah, var(--sab)) + 1.75rem);
     }
   }
+
   .konten-gulir {
     min-height: 0;
     overscroll-behavior-y: auto;
+  }
+
+  body.is-native .poni-workspace,
+  body.is-native .poni-startup-shell {
+    height: 100dvh !important;
+    min-height: 0 !important;
+  }
+
+  body.is-native .konten-gulir {
+    padding-bottom: max(0px, var(--poni-bawah, var(--sab, 0px)));
+    box-sizing: border-box;
+  }
+  body.is-native .konten-gulir > .poni-konten {
+    padding-bottom: 1.25rem;
+  }
+  @media (min-width: 640px) {
+    body.is-native .konten-gulir > .poni-konten {
+      padding-bottom: 1.5rem;
+    }
+  }
+  @media (min-width: 1024px) {
+    body.is-native .konten-gulir > .poni-konten {
+      padding-bottom: 1.75rem;
+    }
+  }
+
+  .poni-header,
+  body.is-native .poni-header,
+  body.is-native header.poni-header {
+    padding-top: var(--poni-atas, var(--sat)) !important;
+    min-height: calc(56px + var(--poni-atas, var(--sat))) !important;
+    height: calc(56px + var(--poni-atas, var(--sat))) !important;
+    padding-left: max(1rem, var(--poni-kiri)) !important;
+    padding-right: max(1rem, var(--poni-kanan)) !important;
+    box-sizing: border-box !important;
+  }
+  @media (min-width: 640px) {
+    .poni-header,
+    body.is-native .poni-header,
+    body.is-native header.poni-header {
+      padding-left: max(1.5rem, var(--poni-kiri)) !important;
+      padding-right: max(1.5rem, var(--poni-kanan)) !important;
+    }
+  }
+
+  .poni-sidebar {
+    padding-left: var(--poni-kiri);
+    padding-bottom: var(--poni-bawah);
+  }
+
+  body.is-native .poni-sidebar,
+  body.is-native aside.poni-sidebar {
+    top: calc(var(--sat) + 0.5rem) !important;
+    height: calc(100dvh - var(--sat) - var(--sab) - 0.5rem) !important;
+    max-height: calc(100dvh - var(--sat) - var(--sab) - 0.5rem) !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    margin-left: 0 !important;
+    border-radius: 0 1.25rem 1.25rem 0 !important;
+    overflow: visible !important;
+  }
+
+  @media (min-width: 1024px) {
+    body.is-native .poni-sidebar,
+    body.is-native aside.poni-sidebar {
+      top: 0 !important;
+      height: 100% !important;
+      max-height: 100% !important;
+      border-radius: 0 !important;
+      margin-left: 0 !important;
+    }
   }
 }
 
@@ -275,10 +364,10 @@
 }
 
 .modal-layer.fixed.inset-0 {
-  --modal-safe-inset-top: 1rem;
-  --modal-safe-inset-right: 1rem;
-  --modal-safe-inset-bottom: 1rem;
-  --modal-safe-inset-left: 1rem;
+  --modal-safe-inset-top: max(1rem, var(--poni-atas, var(--sat, 0px)));
+  --modal-safe-inset-right: max(1rem, var(--poni-kanan, 0px));
+  --modal-safe-inset-bottom: max(1rem, var(--poni-bawah, var(--sab, 0px)));
+  --modal-safe-inset-left: max(1rem, var(--poni-kiri, 0px));
   padding: var(--modal-safe-inset-top) var(--modal-safe-inset-right)
     var(--modal-safe-inset-bottom) var(--modal-safe-inset-left);
 }

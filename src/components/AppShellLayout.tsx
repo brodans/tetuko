@@ -112,7 +112,7 @@ export default function AppShellLayout({
     : [{ id: 'logout', label: 'Keluar / Ganti Server', hint: 'Kembali ke pilihan server', icon: <LogOut className="w-4 h-4 text-rose-500" />, tone: 'danger', onClick: onLogout }];
 
   return (
-    <div className="bg-slate-50 dark:bg-[#0B1120] text-slate-800 dark:text-slate-200 font-sans h-[100svh] w-full flex transition-colors duration-300 overflow-hidden relative">
+    <div className="poni-workspace bg-slate-50 dark:bg-[#0B1120] text-slate-800 dark:text-slate-200 font-sans h-[100svh] w-full flex transition-colors duration-300 overflow-hidden relative">
       {/* Sidebar */}
       <aside
         className={`poni-sidebar bg-[#0F172A] dark:bg-[#070B14] border-r border-slate-800/50 flex flex-col h-full fixed inset-y-0 left-0 lg:relative lg:inset-y-auto lg:left-auto transition-all duration-300 ease-in-out z-40 shadow-2xl lg:shadow-none ${

@@ -2,7 +2,7 @@
 <html lang="id" class="light">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>TETUKO - Teknologi Terpadu Komprehensif</title>
 
     <!-- ─── Favicon ──────────────────────────────────────────────
@@ -73,8 +73,8 @@
       *, *::before, *::after { box-sizing: border-box; }
       html, body, #root { min-height: 100%; margin: 0; }
       :root {
-        --sat: env(safe-area-inset-top, 24px);
-        --sab: env(safe-area-inset-bottom, 24px);
+        --sat: env(safe-area-inset-top, 0px);
+        --sab: env(safe-area-inset-bottom, 0px);
         --poni-kiri: env(safe-area-inset-left, 0px);
         --poni-kanan: env(safe-area-inset-right, 0px);
         --poni-atas: var(--sat);
@@ -679,6 +679,20 @@
           var fallback = document.querySelector('.boot-hal[data-boot="tabBeranda"]');
           if (fallback) fallback.hidden = false;
         }
+      })();
+    </script>
+    <script>
+      (function () {
+        try {
+          var isTauri = !!(window.__TAURI_INTERNALS__ || window.__TAURI__);
+          var isAndroid = /android/i.test(navigator.userAgent || '');
+          if (isTauri && isAndroid) {
+            document.documentElement.classList.add('is-native');
+            document.addEventListener('DOMContentLoaded', function () {
+              document.body && document.body.classList.add('is-native');
+            });
+          }
+        } catch (e) {}
       })();
     </script>
     <script type="module" src="/src/main.tsx"></script>

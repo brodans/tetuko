@@ -343,6 +343,8 @@ const activity = join(pkgDir, 'MainActivity.kt');
 put(activity, `package id.tetuko.app
 
 import android.content.res.Configuration
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -354,10 +356,19 @@ import android.webkit.WebView
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 
 class MainActivity : TauriActivity() {
 
   inner class TetukoBridge {
+    @JavascriptInterface
+    fun setTheme(dark: Boolean) {
+      mainHandler.post {
+        appThemeIsDark = dark
+        applySystemBarTheme()
+      }
+    }
+
     @JavascriptInterface
     fun startForegroundService(title: String?, content: String?) {
       mainHandler.post {
@@ -426,6 +437,7 @@ class MainActivity : TauriActivity() {
   private var checkAttempts = 0
   private val maxCheckAttempts = 30
   private var cachedInsets: WindowInsetsCompat? = null
+  private var appThemeIsDark = false
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
@@ -434,6 +446,12 @@ class MainActivity : TauriActivity() {
       window.isStatusBarContrastEnforced = false
       window.isNavigationBarContrastEnforced = false
     }
+
+    val systemIsDark = (resources.configuration.uiMode and
+      Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+    appThemeIsDark = systemIsDark
+    applySystemBarTheme()
+
     ViewCompat.setOnApplyWindowInsetsListener(window.decorView) { _, insets ->
       cachedInsets = insets
       val wv = findWebView(window.decorView)
@@ -441,6 +459,16 @@ class MainActivity : TauriActivity() {
       insets
     }
     startBridgeInjectionLoop()
+  }
+
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    super.onConfigurationChanged(newConfig)
+    val systemIsDark = (newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+    // Jangan menimpa pilihan tema eksplisit pengguna; hanya sinkronkan jika belum pernah diset bridge.
+    if (!bridgeInjected) {
+      appThemeIsDark = systemIsDark
+      applySystemBarTheme()
+    }
   }
 
   override fun onResume() {
@@ -476,6 +504,27 @@ class MainActivity : TauriActivity() {
     cookieManager.setAcceptThirdPartyCookies(wv, true)
     val insets = cachedInsets ?: ViewCompat.getRootWindowInsets(window.decorView)
     if (insets != null) sendInsetsToWeb(insets, wv)
+    applySystemBarTheme()
+  }
+
+  private fun applySystemBarTheme() {
+    runOnUiThread {
+      val isDark = appThemeIsDark
+      val workspaceColor = if (isDark) Color.parseColor("#0B1120") else Color.parseColor("#F8FAFC")
+      window.statusBarColor = Color.TRANSPARENT
+      window.navigationBarColor = Color.TRANSPARENT
+      window.decorView.setPadding(0, 0, 0, 0)
+      window.setBackgroundDrawable(ColorDrawable(workspaceColor))
+      window.decorView.setBackgroundColor(workspaceColor)
+      findWebView(window.decorView)?.setBackgroundColor(workspaceColor)
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        window.isStatusBarContrastEnforced = false
+        window.isNavigationBarContrastEnforced = false
+      }
+      val controller = WindowCompat.getInsetsController(window, window.decorView)
+      controller.isAppearanceLightStatusBars = !isDark
+      controller.isAppearanceLightNavigationBars = !isDark
+    }
   }
 
   private fun sendInsetsToWeb(insets: WindowInsetsCompat, targetWv: WebView? = null) {
@@ -491,16 +540,42 @@ class MainActivity : TauriActivity() {
       (function() {
         try {
           var top='${topDp}px', bot='${bottomDp}px', left='${leftDp}px', right='${rightDp}px';
-          document.documentElement.style.setProperty('--sat', top);
-          document.documentElement.style.setProperty('--sab', bot);
-          document.documentElement.style.setProperty('--safe-area-inset-top', top);
-          document.documentElement.style.setProperty('--safe-area-inset-bottom', bot);
-          document.documentElement.style.setProperty('--safe-area-inset-left', left);
-          document.documentElement.style.setProperty('--safe-area-inset-right', right);
+          var root = document.documentElement;
+          var body = document.body;
+          root.style.setProperty('--sat', top);
+          root.style.setProperty('--sab', bot);
+          root.style.setProperty('--safe-area-inset-top', top);
+          root.style.setProperty('--safe-area-inset-bottom', bot);
+          root.style.setProperty('--safe-area-inset-left', left);
+          root.style.setProperty('--safe-area-inset-right', right);
+          root.style.setProperty('--poni-atas', top);
+          root.style.setProperty('--poni-bawah', bot);
+          root.style.setProperty('--poni-kiri', left);
+          root.style.setProperty('--poni-kanan', right);
+          if (body) body.classList.add('is-native');
+          root.classList.add('is-native');
         } catch(e) {}
       })();
     """.trimIndent()
     wv.evaluateJavascript(script, null)
+  }
+
+  @Deprecated("Deprecated in Java")
+  override fun onBackPressed() {
+    val wv = findWebView(window.decorView)
+    if (wv != null) {
+      wv.evaluateJavascript(
+        "(function(){try{var h=window.customBackHandlers||[];for(var i=h.length-1;i>=0;i--){var fn=h[i];if(typeof fn==='function'&&fn()===true){return 'handled';}}}catch(e){}return 'default';})()"
+      ) { result ->
+        val handled = result?.contains("handled") == true
+        if (handled) return@evaluateJavascript
+        runOnUiThread {
+          if (wv.canGoBack()) wv.goBack() else super.onBackPressed()
+        }
+      }
+      return
+    }
+    super.onBackPressed()
   }
 
   private fun findWebView(view: View): WebView? {
